@@ -197,7 +197,7 @@ def _dask_coupling(client,
 def coupling_matrix(u,
                     nn_cutoff, state, degeneracy=None,
                     start=None, stop=None, step=None, client=None, 
-                    model = Literal['yaehmop', 'chadML'] ):
+                    model: Literal['yaehmop', 'chadML'] = 'yaehmop' ):
     """Generate Hamiltonian matrix H_frag for each frame in trajectory
 
     Parameters
@@ -256,10 +256,10 @@ def coupling_matrix(u,
         for i, ts in enumerate(u.trajectory[start:stop:step]):
             logger.info("Processing frame {} of {}"
                         "".format(i + 1, nframes))
-            if model == 'yaehop':
+            if model == 'yaehmop':
               H_frag = _single_frame(u.atoms.fragments, nn_cutoff, degeneracy, state)
             elif model == 'chadML':
-              H_frag = _ocelotl_frame(u.atoms.fragments, nn_cutoff)
+              H_frag = _ocelotl_frame(u.atoms.fragments, nn_cutoff, degeneracy)
             frames.append(ts.frame)
             Hs.append(H_frag)
         H_frag = np.stack(Hs)
@@ -277,7 +277,7 @@ def coupling_matrix(u,
         degeneracy=degeneracy,
     )
 
-def  _ocelotl_frame(fragments, nn_cutoff):
+def  _ocelotl_frame(fragments, nn_cutoff, degeneracy):
     """Calculate the coupling from the fragments
 
     Parameters
@@ -291,7 +291,6 @@ def  _ocelotl_frame(fragments, nn_cutoff):
     dimers_pymat = [_atomgroup_to_pymatgen_molecule(dimer) for dimer in dimers.items()]
     dimers_dict = dict(zip(dimers.keys(),dimers_pymat))
 
-    degeneracy = 1
     size = degeneracy.sum()
     H_frag = np.zeros((size, size))
     # start and stop indices for each fragment
@@ -308,7 +307,7 @@ def  _ocelotl_frame(fragments, nn_cutoff):
         H_frag[diag[ix:iy], diag[ix:iy]] = predict_from_molecule(
             molecule = ags,
             model = ocelotml_model
-        )[0]
+        )
         wave[i] = 0
         wave[j] = 0
 
@@ -343,7 +342,7 @@ def _atomgroup_to_pymatgen_molecule(atomgroup) -> Molecule:
       # print(atomgroup)
       atomgroup =  sum(atomgroup[-1])
 
-    elements = [atom.element for atom in atomgroup.atoms]
+    elements = atomgroup.names
     coords = atomgroup.positions  # NumPy array of shape (n_atoms, 3)
     
     mol = Molecule(elements, coords)
