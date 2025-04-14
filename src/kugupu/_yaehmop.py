@@ -146,7 +146,7 @@ def run_dimer(ags):
     orb_i, ele_i = count_orbitals(ag_i)
     orb_j, ele_j = count_orbitals(ag_j)
 
-    Hij = H_mat[:orb_i, orb_i:]
+    Hij = H_mat[:orb_i, orb_i:] #off-diagonal matrix of orbitals i interacting with j
     Hii = H_mat[:orb_i, :orb_i]
     Sii = S_mat[:orb_i, :orb_i]
     Hjj = H_mat[orb_i:, orb_i:]

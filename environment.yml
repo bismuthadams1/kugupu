@@ -16,3 +16,4 @@ dependencies:
  - distributed
  - docopt
  - wheel
+ - lifelines

@@ -18,12 +18,17 @@
 import numpy as np
 from tqdm import tqdm
 import MDAnalysis as mda
+from typing import Literal
+from ocelotml import load_models
+from pymatgen.core.structure import Molecule
 
 from . import logger
 from . import KugupuResults
 from .dimers import find_dimers
 from ._yaehmop import run_dimer, run_fragment
 from ._hamiltonian_reduce import find_psi
+
+ocelotml_model = load_models('hh')
 
 # Elements known to yaehmop (default eht_parms at least...)
 REF_ELEMS = set('AC AG AL AM AR AS AT AU B BA BE BI BK BR C CA CD CE CF CL CM '
@@ -189,8 +194,10 @@ def _dask_coupling(client,
     return client.compute(dask.delayed(np.stack)(futures)).result()
 
 
-def coupling_matrix(u, nn_cutoff, state, degeneracy=None,
-                    start=None, stop=None, step=None, client=None):
+def coupling_matrix(u,
+                    nn_cutoff, state, degeneracy=None,
+                    start=None, stop=None, step=None, client=None, 
+                    model = Literal['yaehmop', 'chadML'] ):
     """Generate Hamiltonian matrix H_frag for each frame in trajectory
 
     Parameters
@@ -267,3 +274,23 @@ def coupling_matrix(u, nn_cutoff, state, degeneracy=None,
         H_frag=H_frag,
         degeneracy=degeneracy,
     )
+
+def  _ocelotl_frame(fragments, nn_cutoff):
+    """Calculate the coupling from the fragments
+
+    Parameters
+    ----------
+    fragments : list of AtomGroup
+          all fragments in system    
+    """
+    for frag in fragments:
+        mda.lib.mdamath.make_whole(frag)
+    dimers = find_dimers(fragments, nn_cutoff)
+
+
+def atomgroup_to_pymatgen_molecule(atomgroup):
+    elements = [atom.element for atom in atomgroup.atoms]
+    coords = atomgroup.positions  # NumPy array of shape (n_atoms, 3)
+    
+    mol = Molecule(elements, coords)
+    return mol

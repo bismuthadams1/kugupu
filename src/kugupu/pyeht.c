@@ -4,8 +4,8 @@
 {
     "distutils": {
         "depends": [
-            "/Users/richard/mambaforge/envs/kgp/include/yaehmop/bind.h",
-            "/Users/richard/mambaforge/envs/kgp/include/yaehmop/prototypes.h"
+            "/Users/k2584788/.local/share/mamba/envs/forked_kugupu/include/yaehmop/bind.h",
+            "/Users/k2584788/.local/share/mamba/envs/forked_kugupu/include/yaehmop/prototypes.h"
         ],
         "extra_compile_args": [
             "-std=c99",
@@ -13,12 +13,16 @@
             "-O3"
         ],
         "include_dirs": [
-            "/Users/richard/mambaforge/envs/kgp/include"
+            "/Users/k2584788/.local/share/mamba/envs/forked_kugupu/include",
+            "/Users/k2584788/.local/share/mamba/envs/kgp/include"
         ],
         "libraries": [
             "yaehmop_eht",
             "lapack",
             "blas"
+        ],
+        "library_dirs": [
+            "/Users/k2584788/.local/share/mamba/envs/kgp/lib"
         ],
         "name": "kugupu._pyeht",
         "sources": [
