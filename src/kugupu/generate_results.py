@@ -19,7 +19,7 @@ import numpy as np
 from tqdm import tqdm
 import MDAnalysis as mda
 from typing import Literal
-from ocelotml import load_models
+from ocelotml import load_models, predict_from_molecule
 from pymatgen.core.structure import Molecule
 
 from . import logger
@@ -256,8 +256,10 @@ def coupling_matrix(u,
         for i, ts in enumerate(u.trajectory[start:stop:step]):
             logger.info("Processing frame {} of {}"
                         "".format(i + 1, nframes))
-            H_frag = _single_frame(u.atoms.fragments, nn_cutoff, degeneracy, state)
-
+            if model == 'yaehop':
+              H_frag = _single_frame(u.atoms.fragments, nn_cutoff, degeneracy, state)
+            elif model == 'chadML':
+              H_frag = _ocelotl_frame(u.atoms.fragments, nn_cutoff)
             frames.append(ts.frame)
             Hs.append(H_frag)
         H_frag = np.stack(Hs)
@@ -286,9 +288,61 @@ def  _ocelotl_frame(fragments, nn_cutoff):
     for frag in fragments:
         mda.lib.mdamath.make_whole(frag)
     dimers = find_dimers(fragments, nn_cutoff)
+    dimers_pymat = [_atomgroup_to_pymatgen_molecule(dimer) for dimer in dimers.items()]
+    dimers_dict = dict(zip(dimers.keys(),dimers_pymat))
 
+    degeneracy = 1
+    size = degeneracy.sum()
+    H_frag = np.zeros((size, size))
+    # start and stop indices for each fragment
+    stops = np.cumsum(degeneracy)
+    starts = np.r_[0, stops[:-1]]
+    diag = np.arange(size)  # diagonal indices
+    wave = dict()  # wavefunctions for each fragment
 
-def atomgroup_to_pymatgen_molecule(atomgroup):
+    for (i, j), ags in tqdm(sorted(dimers_dict.items())):
+        # indices for indexing H_frag for each fragment
+        ix, iy = starts[i], stops[i]
+        jx, jy = starts[j], stops[j]
+
+        H_frag[diag[ix:iy], diag[ix:iy]] = predict_from_molecule(
+            molecule = ags,
+            model = ocelotml_model
+        )[0]
+        wave[i] = 0
+        wave[j] = 0
+
+    
+        # do single fragment calculations for all missing
+    for i in (set(range(len(degeneracy))) - set(wave.keys())):
+        ix, iy = starts[i], stops[i]
+        e_i = predict_from_molecule(
+            molecule  = _atomgroup_to_pymatgen_molecule(fragments[i]),
+            model=ocelotml_model
+        )
+        H_frag[diag[ix:iy], diag[ix:iy]] = e_i
+        # don't need to save the psi for this fragment
+        # wave[i] = psi_i
+
+    return H_frag
+
+def _atomgroup_to_pymatgen_molecule(atomgroup) -> Molecule:
+    """Takes a tuple of AtomGroup objects and turns them into a single pymatgen object
+
+    Parameters
+    ----------
+    atomgroup: AtomGroup
+
+    Returns
+    -------
+    mol: Molecule
+
+    
+    """
+    if isinstance(atomgroup, tuple): 
+      # print(atomgroup)
+      atomgroup =  sum(atomgroup[-1])
+
     elements = [atom.element for atom in atomgroup.atoms]
     coords = atomgroup.positions  # NumPy array of shape (n_atoms, 3)
     
