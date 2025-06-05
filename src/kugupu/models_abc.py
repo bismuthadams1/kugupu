@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from MDAnalysis.core.groups import AtomGroup
+from MDAnalysis import Universe
 from typing import List, Type, Dict, Optional
 
 
@@ -30,12 +31,12 @@ class CouplingModel(ABC):
             self.server_id = None
 
 
-    def __call__(self, fragments: List[AtomGroup], **kwds):
+    def __call__(self, *args, **kwds):
         """call the model"""
         if self.local:
-            return self.__call_local__(fragments, **kwds)
+            return self.__call_local__(*args, **kwds)
         else:
-            return self.__call_remote__(fragments, **kwds)
+            return self.__call_remote__(*args, **kwds)
 
     def __init_subclass__(cls):
         super().__init_subclass__()
@@ -53,7 +54,7 @@ class CouplingModel(ABC):
         ...
 
     @abstractmethod
-    def __call_remote__(self, fragments: List[AtomGroup], *args, **kwds):
+    def __call_remote__(self, u: Universe, *args, **kwds):
         """send a call to our remote workers"""
         ...
     
