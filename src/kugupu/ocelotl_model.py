@@ -83,54 +83,6 @@ class OcelotMLModel(CouplingModel):
         fragments = u_worker.atoms.fragments
         return self.__call_local__(fragments, nn_cutoff, degeneracy, state)
 
-        # if self.client is None:
-        #     raise RuntimeError(
-        #         "No Dask client available. Construct this model with local=False."
-        #     )
-        # frames = np.arange(len(universe.trajectory))
-
-        # future_top = self.client.scatter(universe._topology, broadcast=True)
-
-        # futures = []
-        # for i in frames[start:stop:step]:
-        #     futures.append(dask.delayed(_dask_single_universe)(
-        #         future_top, universe.trajectory.filename, i, nn_cutoff, degeneracy, state))
-
-
-        # return self.client.compute(dask.delayed(np.stack)(futures)).result()
-
-def _dask_single_universe(top, trj, frame, nn_cutoff, degeneracy, state):
-    """Dask helper function for calculating a single frame
-
-    Parameters
-    ----------
-    top : pickle
-    pickled MDAnalysis Topology, usually broadcasted to workers
-    trj : str
-    filename to the trajectory file
-    frame : int
-    index of the frame to analyse
-    nn_cutoff, degeneracy, state
-    same as for _single_frame
-
-    Reheats the MDAnalysis Universe, loads correct frame then calls _single_frame
-    """
-    # load the Universe
-    u_worker = mda.Universe(top)
-    u_worker.load_new(trj)
-    # select correct frame
-    u_worker.trajectory[frame]
-
-    fragments = u_worker.atoms.fragments
-
-    return  _compute_ocelot_frame_from_fragments(
-        fragments= fragments,
-        nn_cutoff=nn_cutoff,
-        degeneracy= degeneracy,
-        state= state
-    )
-
-
 def _convert_to_model_format(fragments: List[AtomGroup], nn_cutoff: int) -> PymatgenMolecule:
         """
         Turn a single AtomGroup (or a tuple of two AtomGroups) into a Pymatgen Molecule.
