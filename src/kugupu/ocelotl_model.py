@@ -1,11 +1,9 @@
 # ocelotl_model.py
-import dask
+
 import numpy as np
 import MDAnalysis as mda
 from typing import List, Dict, Optional, Tuple, Any
 from MDAnalysis.core.groups import AtomGroup
-import MDAnalysis
-from MDAnalysis import Universe
 from pymatgen.core.structure import Molecule as PymatgenMolecule
 import pickle as pkl
 
@@ -16,13 +14,13 @@ from . import logger
 from ocelotml import load_models, predict_from_list, predict_from_molecule
 
 # Load your OcelotML weights once (e.g. “hh” model)
+# Here we can add options for the lumo model too
 ocelotml_model = load_models('hh')
-
 
 class OcelotMLModel(CouplingModel):
     _name = "ocelotml"
 
-    def __init__(self, *, local: bool = False, server_id: Optional[Any] = None):
+    def __init__(self, *, local: bool = False, server_id: Optional["distributed.Client"] = None):
         super().__init__(local = local, server_id = server_id) 
         if not self.local:
             if hasattr(self.server_id, "submit"):
@@ -60,7 +58,7 @@ class OcelotMLModel(CouplingModel):
         top_pickle: pkl,
         traj_filename: str,
         frame_idx: int,
-        nn_cutoff: int,
+        nn_cutoff: float,
         degeneracy: np.ndarray,
         state: str,
     ) -> np.ndarray:
@@ -77,16 +75,15 @@ class OcelotMLModel(CouplingModel):
           - start, stop, step  [these are ignored here, because this is per‐frame]
         """
 
-        u_worker = MDAnalysis.Universe(top_pickle)
+        u_worker = mda.Universe(top_pickle)
         u_worker.load_new(traj_filename)
         u_worker.trajectory[frame_idx]
         fragments = u_worker.atoms.fragments
         return self.__call_local__(fragments, nn_cutoff, degeneracy, state)
 
-def _convert_to_model_format(fragments: List[AtomGroup], nn_cutoff: int) -> PymatgenMolecule:
+def _convert_to_model_format(fragments: List[AtomGroup], nn_cutoff: float) -> Dict[tuple,PymatgenMolecule]:
         """
-        Turn a single AtomGroup (or a tuple of two AtomGroups) into a Pymatgen Molecule.
-        If it’s a tuple (e.g. a dimer), sum the last AtomGroup in the tuple.
+        Find all dimer pairs within nn_cutoff, and convert each pair into a Pymatgen Molecule.
         """
         # nn_cutoff = kwds["nn_cutoff"]
 
@@ -152,7 +149,7 @@ def _atomgroup_to_pymatgen_molecule(atomgroup) -> dict[tuple, PymatgenMolecule]:
     
     """
     if isinstance(atomgroup, tuple): 
-        atomgroup =sum(atomgroup[-1])
+        atomgroup = sum(atomgroup[-1])
 
     elements = atomgroup.names
     coords = atomgroup.positions  # NumPy array of shape (n_atoms, 3)
