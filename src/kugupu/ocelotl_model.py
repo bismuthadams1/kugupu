@@ -85,7 +85,6 @@ def _convert_to_model_format(fragments: List[AtomGroup], nn_cutoff: float) -> Di
         """
         Find all dimer pairs within nn_cutoff, and convert each pair into a Pymatgen Molecule.
         """
-        # nn_cutoff = kwds["nn_cutoff"]
 
         for frag in fragments:
             mda.lib.mdamath.make_whole(frag)

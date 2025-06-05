@@ -11,13 +11,12 @@ from ._yaehmop import run_dimer, run_fragment
 from ._hamiltonian_reduce import find_psi
 
 
-
 class YaehmopModel(CouplingModel):
     _name = "yaehmop"
 
     def __init__(self, *, local: bool = False, server_id: Optional[Any] = None):
         """
-        If local=True, everything runs in‐process. Otherwise, server_id must be
+        If local=True, everything runs in-process. Otherwise, server_id must be
         a dask.distributed.Client, which we will use for remote submission.
         """
         super().__init__(local=local, server_id=server_id)
@@ -37,7 +36,7 @@ class YaehmopModel(CouplingModel):
         state: str = "homo",
     ) -> np.ndarray:
         """
-        Local path: compute a single‐frame coupling matrix entirely in‐process.
+        Local path: compute a single-frame coupling matrix entirely in-process.
         """
         return _compute_yaehmop_frame_from_fragments(
             fragments, nn_cutoff, degeneracy, state
@@ -104,31 +103,26 @@ def _compute_yaehmop_frame_from_fragments(
     Exactly the logic of _single_frame, but factored out as a helper.
     Given:
       - fragments: List[AtomGroup] for one frame
-      - nn_cutoff: nearest‐neighbour cutoff
+      - nn_cutoff: nearest-neighbour cutoff
       - degeneracy: 1D array of degeneracies
       - state: 'homo' or 'lumo'
     Returns
       - H_frag: 2D numpy array of shape (sum(degeneracy), sum(degeneracy))
     """
-    # (a) Make each fragment whole under periodic boundaries
     for frag in fragments:
         mda.lib.mdamath.make_whole(frag)
 
-    # (b) Find all dimer pairs within nn_cutoff
     dimers = find_dimers(fragments, nn_cutoff)
 
-    # (c) Prepare H_frag with correct size
     size = int(degeneracy.sum())
     H_frag = np.zeros((size, size), dtype=float)
 
-    stops = np.cumsum(degeneracy).astype(int)
-    starts = np.r_[0, stops[:-1]].astype(int)
+    stops = np.cumsum(degeneracy)
+    starts = np.r_[0, stops[:-1]]
     diag_idx = np.arange(size)
 
-    # (d) Temporary storage for wavefunctions
     wave = {}
 
-    # (e) Loop over each dimer (i,j) in sorted order
     for (i, j), ag_pair in sorted(dimers.items()):
         ix, iy = starts[i], stops[i]
         jx, jy = starts[j], stops[j]
@@ -136,7 +130,6 @@ def _compute_yaehmop_frame_from_fragments(
         logger.debug(f"Yaehmop: computing dimer {i}-{j}")
         Hij, frag_i, frag_j = run_dimer(ag_pair)
 
-        # Fragment i
         if i in wave:
             psi_i = wave[i]
             e_i = None  # energy already on diagonal
@@ -145,7 +138,6 @@ def _compute_yaehmop_frame_from_fragments(
             H_frag[diag_idx[ix:iy], diag_idx[ix:iy]] = e_i
             wave[i] = psi_i
 
-        # Fragment j
         if j in wave:
             psi_j = wave[j]
             e_j = None
@@ -154,12 +146,10 @@ def _compute_yaehmop_frame_from_fragments(
             H_frag[diag_idx[jx:jy], diag_idx[jx:jy]] = e_j
             wave[j] = psi_j
 
-        # Off‐diagonal: coupling = |ψ_iᵀ·Hij·ψ_j|
         coupling_val = abs(psi_i.T.dot(Hij).dot(psi_j))
         H_frag[ix:iy, jx:jy] = coupling_val
         H_frag[jx:jy, ix:iy] = coupling_val
 
-    # (f) Handle any fragment not yet seen (lone fragments)
     unseen = set(range(len(degeneracy))) - set(wave.keys())
     for i in unseen:
         ix, iy = starts[i], stops[i]
@@ -167,6 +157,5 @@ def _compute_yaehmop_frame_from_fragments(
         H_mat, S_mat, ele = run_fragment(fragments[i])
         e_i, psi_i = find_psi(H_mat, S_mat, ele, state, degeneracy[i])
         H_frag[diag_idx[ix:iy], diag_idx[ix:iy]] = e_i
-        # no need to store psi for lone fragments
 
     return H_frag
