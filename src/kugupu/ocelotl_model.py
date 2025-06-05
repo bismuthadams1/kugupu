@@ -4,7 +4,7 @@ from tqdm import tqdm
 import MDAnalysis as mda
 from typing import List, Dict, Any
 from MDAnalysis.core.groups import AtomGroup
-from pymatgen.core.structure import Molecule
+from pymatgen.core.structure import Molecule as PymatgenMolecule
 from typing import List, Dict, Any, Optional, Tuple
 
 
@@ -29,9 +29,11 @@ class OcelotMLModel(CouplingModel):
                 from dask.distributed import Client
 
                 self.client = Client()
+        else:
+            self.client = None
 
 
-    def _convert_to_model_format(self, fragments: List[AtomGroup], **kwds) -> List[Molecule]:
+    def _convert_to_model_format(self, fragments: List[AtomGroup], **kwds) -> List[PymatgenMolecule]:
         """
         Turn every dimer (a tuple of two AtomGroup objects) into a single
         Pymatgen Molecule.  Just return the list of Molecule objects.
@@ -44,7 +46,7 @@ class OcelotMLModel(CouplingModel):
 
         dimers = find_dimers(fragments, nn_cutoff)
 
-        dimers_pymat: Dict[tuple, Molecule] = {}
+        dimers_pymat: Dict[tuple, PymatgenMolecule] = {}
         for (i, j), ag_pair in dimers.items():
             mol = self._convert_to_model_format(ag_pair)
             dimers_pymat[(i, j)] = mol
@@ -94,11 +96,11 @@ class OcelotMLModel(CouplingModel):
         and call predict_from_list on workers. Here, we just do a local call
         for simplicity.
         """
-
+        frames = np.arange(len(u.trajectory))
 
         return self.__call_local__(fragments, **kwds)
     
-    def _convert_to_model_format(self, fragments: AtomGroup) -> Molecule:
+    def _convert_to_model_format(self, fragments: AtomGroup) -> PymatgenMolecule:
         """
         Turn a single AtomGroup (or a tuple of two AtomGroups) into a Pymatgen Molecule.
         If it’s a tuple (e.g. a dimer), sum the last AtomGroup in the tuple.
@@ -109,6 +111,6 @@ class OcelotMLModel(CouplingModel):
             atomgroup = atomgroup[-1]  # this flattens to a single AtomGroup
         elements = atomgroup.names
         coords = atomgroup.positions
-        return Molecule(elements, coords)
+        return PymatgenMolecule(elements, coords)
 
 
