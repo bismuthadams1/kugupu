@@ -19,8 +19,9 @@ import numpy as np
 from tqdm import tqdm
 import MDAnalysis as mda
 from typing import Literal
-from ocelotml import load_models, predict_from_molecule
+from ocelotml import load_models, predict_from_molecule, predict_from_list
 from pymatgen.core.structure import Molecule
+from .models_abc import MODELS_AVAILABLE, CouplingModel
 
 from . import logger
 from . import KugupuResults
@@ -298,6 +299,9 @@ def  _ocelotl_frame(fragments, nn_cutoff, degeneracy):
     starts = np.r_[0, stops[:-1]]
     diag = np.arange(size)  # diagonal indices
     wave = dict()  # wavefunctions for each fragment
+    print(dimers_pymat[0].to_file('dimer.xyz'))
+    predictions = predict_from_list(dimers_pymat, ocelotml_model)
+    print(predictions)
 
     for (i, j), ags in tqdm(sorted(dimers_dict.items())):
         # indices for indexing H_frag for each fragment
