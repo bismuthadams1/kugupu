@@ -52,6 +52,3 @@ class CouplingModel(ABC):
         """send a call to our remote workers"""
         ...
     
-    @abstractmethod
-    def _convert_to_model_format(self, fragments: List[AtomGroup], **kwds):
-        """convert to format required for submission to model"""
