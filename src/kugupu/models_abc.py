@@ -23,13 +23,7 @@ class CouplingModel(ABC):
           
         """
         self.local = local
-        if not self.local:
-            if server_id is None:
-                raise ValueError("`server_id` must be provided when local=False")
-            self.server_id = server_id
-        else:
-            self.server_id = None
-
+        self.server_id = server_id
 
     def __call__(self, *args, **kwds):
         """call the model"""

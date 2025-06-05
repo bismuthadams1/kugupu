@@ -9,7 +9,7 @@ from MDAnalysis import Universe
 from pymatgen.core.structure import Molecule as PymatgenMolecule
 from typing import List, Dict, Any, Optional, Tuple
 
-from .coupling_model_abc import CouplingModel
+from .models_abc import CouplingModel
 from .dimers import find_dimers
 from . import logger
 
@@ -29,7 +29,6 @@ class OcelotMLModel(CouplingModel):
                 self.client = self.server_id
             else:
                 from dask.distributed import Client
-
                 self.client = Client()
         else:
             self.client = None

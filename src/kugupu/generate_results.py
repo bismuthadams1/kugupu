@@ -21,6 +21,8 @@ import MDAnalysis as mda
 from typing import Literal
 from ocelotml import load_models, predict_from_molecule, predict_from_list
 from pymatgen.core.structure import Molecule
+from typing import List, Dict, Any, Optional, Tuple
+
 from .models_abc import MODELS_AVAILABLE, CouplingModel
 
 from . import logger
@@ -29,7 +31,9 @@ from .dimers import find_dimers
 from ._yaehmop import run_dimer, run_fragment
 from ._hamiltonian_reduce import find_psi
 
-ocelotml_model = load_models('hh')
+# ocelotml_model = load_models('hh')
+print("models available")
+print(MODELS_AVAILABLE)
 
 # Elements known to yaehmop (default eht_parms at least...)
 REF_ELEMS = set('AC AG AL AM AR AS AT AU B BA BE BI BK BR C CA CD CE CF CL CM '
@@ -197,7 +201,7 @@ def _dask_coupling(client,
 
 def coupling_matrix(u,
                     nn_cutoff, state, degeneracy=None,
-                    start=None, stop=None, step=None, client=None, 
+                    start=None, stop=None, step=None, client: Optional[bool] = None, 
                     model: Literal['yaehmop', 'chadML'] = 'yaehmop' ):
     """Generate Hamiltonian matrix H_frag for each frame in trajectory
 
@@ -233,9 +237,18 @@ def coupling_matrix(u,
     """
     _check_universe(u)
 
+    if not model == 'yaehmop':
+        if client:
+          model_instance = MODELS_AVAILABLE["ocelotml"](local=False)
+        else:
+          model_instance = MODELS_AVAILABLE["ocelotml"](local=True)
+
     Hs, frames = [], []
 
     nframes = len(u.trajectory[start:stop:step])
+    top_pickle = u._topology
+    traj_filename = u.trahectory.filename
+
     logger.info("Processing {} frames".format(nframes))
 
     if degeneracy is not None:
@@ -253,30 +266,56 @@ def coupling_matrix(u,
                 deg_arr[i] = degeneracy[frag.residues[0].resname]
             degeneracy = deg_arr
 
-    if client is None:
-        for i, ts in enumerate(u.trajectory[start:stop:step]):
-            logger.info("Processing frame {} of {}"
-                        "".format(i + 1, nframes))
-            if model == 'yaehmop':
-              H_frag = _single_frame(u.atoms.fragments, nn_cutoff, degeneracy, state)
-            elif model == 'chadML':
-              H_frag = _ocelotl_frame(u.atoms.fragments, nn_cutoff, degeneracy)
-            frames.append(ts.frame)
-            Hs.append(H_frag)
-        H_frag = np.stack(Hs)
-        frames = np.array(frames)
-    else:
-        H_frag = _dask_coupling(client, u,
-                                nn_cutoff, degeneracy, state,
-                                start, stop, step)
-        frames = np.arange(len(u.trajectory))[start:stop:step]
+    # if client is None:
+    for i, ts in enumerate(u.trajectory[start:stop:step]):
+        logger.info("Processing frame {} of {}"
+                    "".format(i + 1, nframes))
+        if model == 'yaehmop':
+          H_frag = _single_frame(u.atoms.fragments, nn_cutoff, degeneracy, state)
+        elif model == 'chadML':
+          if model_instance.local:
+            fragments = u.atoms.fragments
+            H_frag = model_instance(
+                fragments,
+                nn_cutoff=nn_cutoff,
+                degeneracy=degeneracy,
+                state=state,
+            )
+          else:
+            frame_idx = ts.frame
+            H_frag = model_instance(
+                top_pickle,
+                traj_filename,
+                frame_idx,
+                nn_cutoff=nn_cutoff,
+                degeneracy=degeneracy,
+                state=state,
+            )
+          model_instance()
+          # H_frag = _ocelotl_frame(u.atoms.fragments, nn_cutoff, degeneracy)
+        frames.append(ts.frame)
+        Hs.append(H_frag)
 
-    logger.info('Done!')
-    return KugupuResults(
-        frames=frames,
-        H_frag=H_frag,
-        degeneracy=degeneracy,
-    )
+    # H_frag = np.stack(Hs)
+    # frames = np.array(frames)
+    H_all = np.stack(Hs)
+    frames_arr = np.array(frames)
+
+    return KugupuResults(frames=frames_arr, H_frag=H_all, degeneracy=degeneracy)
+
+
+    # else:
+    #     H_frag = _dask_coupling(client, u,
+    #                             nn_cutoff, degeneracy, state,
+    #                             start, stop, step)
+    #     frames = np.arange(len(u.trajectory))[start:stop:step]
+
+    # logger.info('Done!')
+    # return KugupuResults(
+    #     frames=frames,
+    #     H_frag=H_frag,
+    #     degeneracy=degeneracy,
+    # )
 
 def  _ocelotl_frame(fragments, nn_cutoff, degeneracy):
     """Calculate the coupling from the fragments
