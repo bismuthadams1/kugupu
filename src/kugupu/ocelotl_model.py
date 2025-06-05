@@ -1,12 +1,13 @@
 # ocelotl_model.py
 import dask
 import numpy as np
-from tqdm import tqdm
 import MDAnalysis as mda
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional, Tuple, Any
 from MDAnalysis.core.groups import AtomGroup
+import MDAnalysis
 from MDAnalysis import Universe
 from pymatgen.core.structure import Molecule as PymatgenMolecule
+import pickle as pkl
 
 from .models_abc import CouplingModel
 from .dimers import find_dimers
@@ -21,7 +22,7 @@ ocelotml_model = load_models('hh')
 class OcelotMLModel(CouplingModel):
     _name = "ocelotml"
 
-    def __init__(self, *, local: bool = False, server_id: Optional[str] = None):
+    def __init__(self, *, local: bool = False, server_id: Optional[Any] = None):
         super().__init__(local = local, server_id = server_id) 
         if not self.local:
             if hasattr(self.server_id, "submit"):
@@ -37,7 +38,7 @@ class OcelotMLModel(CouplingModel):
     def __call_local__(
             self, 
             fragments: List[AtomGroup],
-            nn_cutoff: int,
+            nn_cutoff: float,
             degeneracy: np.ndarray,
             state: Optional[str] = 'homo' #this is where we can pick between models
             ) -> np.ndarray:
@@ -46,7 +47,7 @@ class OcelotMLModel(CouplingModel):
         Expected kwds: nn_cutoff (float), degeneracy (1D array), state unused here.
         """
 
-        return _compute_ocelot_frame(
+        return _compute_ocelot_frame_from_fragments(
             fragments =fragments,
             nn_cutoff = nn_cutoff,
             degeneracy = degeneracy,
@@ -56,12 +57,11 @@ class OcelotMLModel(CouplingModel):
 
     def __call_remote__(
         self,
-        universe: Universe,
+        top_pickle: pkl,
+        traj_filename: str,
+        frame_idx: int,
         nn_cutoff: int,
         degeneracy: np.ndarray,
-        start: int,
-        stop: int,
-        step: int,
         state: str,
     ) -> np.ndarray:
         """
@@ -76,46 +76,28 @@ class OcelotMLModel(CouplingModel):
           - state (str)
           - start, stop, step  [these are ignored here, because this is per‐frame]
         """
-        if self.client is None:
-            raise RuntimeError(
-                "No Dask client available. Construct this model with local=False."
-            )
-        frames = np.arange(len(universe.trajectory))
 
-        future_top = self.client.scatter(universe._topology, broadcast=True)
+        u_worker = MDAnalysis.Universe(top_pickle)
+        u_worker.load_new(traj_filename)
+        u_worker.trajectory[frame_idx]
+        fragments = u_worker.atoms.fragments
+        return self.__call_local__(fragments, nn_cutoff, degeneracy, state)
 
-        futures = []
-        for i in frames[start:stop:step]:
-            futures.append(dask.delayed(_dask_single_universe)(
-                future_top, universe.trajectory.filename, i, nn_cutoff, degeneracy, state))
+        # if self.client is None:
+        #     raise RuntimeError(
+        #         "No Dask client available. Construct this model with local=False."
+        #     )
+        # frames = np.arange(len(universe.trajectory))
 
-        # import dask
+        # future_top = self.client.scatter(universe._topology, broadcast=True)
 
-        # delayed_task = dask.delayed(_dask_single_universe)(
-        #     future_top,
-        #     traj_filename,
-        #     frame_idx,
-        #     nn_cutoff,
-        #     degeneracy,
-        #     state,
-        #     self,  # pass the model instance so the worker can call __call_local__
-        # )
+        # futures = []
+        # for i in frames[start:stop:step]:
+        #     futures.append(dask.delayed(_dask_single_universe)(
+        #         future_top, universe.trajectory.filename, i, nn_cutoff, degeneracy, state))
 
-        # future = self.client.submit(
-        #     _dask_single_universe,
-        #     future_top,
-        #     traj_filename,
-        #     frame_idx,
-        #     nn_cutoff,
-        #     degeneracy,
-        #     state,
-        #     self,  # pass the model instance so worker can call __call_local__
-        # )
 
-        # future = self.client.compute(delayed_task)
-        return self.client.compute(dask.delayed(np.stack)(futures)).result()
-
-    
+        # return self.client.compute(dask.delayed(np.stack)(futures)).result()
 
 def _dask_single_universe(top, trj, frame, nn_cutoff, degeneracy, state):
     """Dask helper function for calculating a single frame
@@ -141,7 +123,7 @@ def _dask_single_universe(top, trj, frame, nn_cutoff, degeneracy, state):
 
     fragments = u_worker.atoms.fragments
 
-    return  _compute_ocelot_frame(
+    return  _compute_ocelot_frame_from_fragments(
         fragments= fragments,
         nn_cutoff=nn_cutoff,
         degeneracy= degeneracy,
@@ -168,14 +150,12 @@ def _convert_to_model_format(fragments: List[AtomGroup], nn_cutoff: int) -> Pyma
 
         return dimers_pymat
 
-def _compute_ocelot_frame(
+def _compute_ocelot_frame_from_fragments(
         fragments: List[AtomGroup],
         nn_cutoff: float,
         degeneracy: np.ndarray,
         state: str,  #implement soon
     ) -> np.ndarray:
-
-    # degeneracy = kwds["degeneracy"]
 
     dimers_dict = _convert_to_model_format(fragments, nn_cutoff)
     size = degeneracy.sum()
@@ -220,7 +200,6 @@ def _atomgroup_to_pymatgen_molecule(atomgroup) -> dict[tuple, PymatgenMolecule]:
     
     """
     if isinstance(atomgroup, tuple): 
-        # print(atomgroup)
         atomgroup =sum(atomgroup[-1])
 
     elements = atomgroup.names

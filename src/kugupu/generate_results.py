@@ -247,8 +247,8 @@ def coupling_matrix(u,
     Hs, frames = [], []
 
     nframes = len(u.trajectory[start:stop:step])
-    # top_pickle = u._topology
-    # traj_filename = u.trajectory.filename
+    top_pickle = u._topology
+    traj_filename = u.trajectory.filename
 
     logger.info("Processing {} frames".format(nframes))
 
@@ -267,34 +267,44 @@ def coupling_matrix(u,
                 deg_arr[i] = degeneracy[frag.residues[0].resname]
             degeneracy = deg_arr
 
-    if client is None:
-      for i, ts in enumerate(u.trajectory[start:stop:step]):
-          logger.info("Processing frame {} of {}"
-                      "".format(i + 1, nframes))
-          if model == 'yaehmop':
-            H_frag = _single_frame(u.atoms.fragments, nn_cutoff, degeneracy, state)
-          elif model == 'ocelotml':
-            if model_instance.local:
-              fragments = u.atoms.fragments
-              H_frag = model_instance(
-                  fragments,
-                  nn_cutoff=nn_cutoff,
-                  degeneracy=degeneracy,
-                  state=state,
-              )
-          frames.append(ts.frame)
-          Hs.append(H_frag)
-    else:
-          H_frag = model_instance(
-              u,
-              nn_cutoff=nn_cutoff,
-              degeneracy=degeneracy,
-              state = "HOMO",
-              start = start,
-              stop = stop,
-              step = step,
-          )
-          # H_frag = _ocelotl_frame(u.atoms.fragments, nn_cutoff, degeneracy)
+    for i, ts in enumerate(u.trajectory[start:stop:step]):
+        logger.info("Processing frame {} of {}"
+                    "".format(i + 1, nframes))
+        if model == 'yaehmop':
+          H_frag = _single_frame(u.atoms.fragments, nn_cutoff, degeneracy, state)
+        elif model == 'ocelotml':
+          if model_instance.local:
+            fragments = u.atoms.fragments
+            H_frag = model_instance(
+                fragments,
+                nn_cutoff=nn_cutoff,
+                degeneracy=degeneracy,
+                state=state,
+            )
+          else:
+            frame_idx = ts.frame
+            H_frag = model_instance(
+                top_pickle,           # remote: pass pickled topology
+                traj_filename,        # and the filename
+                frame_idx,            # and this frame index
+                nn_cutoff, 
+                degeneracy, 
+                state
+            )
+
+        frames.append(ts.frame)
+        Hs.append(H_frag)
+    # else:
+    #       H_frag = model_instance(
+    #           u,
+    #           nn_cutoff=nn_cutoff,
+    #           degeneracy=degeneracy,
+    #           state = "HOMO",
+    #           start = start,
+    #           stop = stop,
+    #           step = step,
+    #       )
+    #       # H_frag = _ocelotl_frame(u.atoms.fragments, nn_cutoff, degeneracy)
 
     # H_frag = np.stack(Hs)
     # frames = np.array(frames)
@@ -302,91 +312,3 @@ def coupling_matrix(u,
     frames_arr = np.array(frames)
 
     return KugupuResults(frames=frames_arr, H_frag=H_all, degeneracy=degeneracy)
-
-
-    # else:
-    #     H_frag = _dask_coupling(client, u,
-    #                             nn_cutoff, degeneracy, state,
-    #                             start, stop, step)
-    #     frames = np.arange(len(u.trajectory))[start:stop:step]
-
-    # logger.info('Done!')
-    # return KugupuResults(
-    #     frames=frames,
-    #     H_frag=H_frag,
-    #     degeneracy=degeneracy,
-    # )
-
-def  _ocelotl_frame(fragments, nn_cutoff, degeneracy):
-    """Calculate the coupling from the fragments
-
-    Parameters
-    ----------
-    fragments : list of AtomGroup
-          all fragments in system    
-    """
-    for frag in fragments:
-        mda.lib.mdamath.make_whole(frag)
-    dimers = find_dimers(fragments, nn_cutoff)
-    dimers_pymat = [_atomgroup_to_pymatgen_molecule(dimer) for dimer in dimers.items()]
-    dimers_dict = dict(zip(dimers.keys(),dimers_pymat))
-
-    size = degeneracy.sum()
-    H_frag = np.zeros((size, size))
-    # start and stop indices for each fragment
-    stops = np.cumsum(degeneracy)
-    starts = np.r_[0, stops[:-1]]
-    diag = np.arange(size)  # diagonal indices
-    wave = dict()  # wavefunctions for each fragment
-    print(dimers_pymat[0].to_file('dimer.xyz'))
-    predictions = predict_from_list(dimers_pymat, ocelotml_model)
-    print(predictions)
-
-    for (i, j), ags in tqdm(sorted(dimers_dict.items())):
-        # indices for indexing H_frag for each fragment
-        ix, iy = starts[i], stops[i]
-        jx, jy = starts[j], stops[j]
-
-        H_frag[diag[ix:iy], diag[ix:iy]] = predict_from_molecule(
-            molecule = ags,
-            model = ocelotml_model
-        )
-        wave[i] = 0
-        wave[j] = 0
-
-    
-        # do single fragment calculations for all missing
-    for i in (set(range(len(degeneracy))) - set(wave.keys())):
-        ix, iy = starts[i], stops[i]
-        e_i = predict_from_molecule(
-            molecule  = _atomgroup_to_pymatgen_molecule(fragments[i]),
-            model=ocelotml_model
-        )
-        H_frag[diag[ix:iy], diag[ix:iy]] = e_i
-        # don't need to save the psi for this fragment
-        # wave[i] = psi_i
-
-    return H_frag
-
-def _atomgroup_to_pymatgen_molecule(atomgroup) -> Molecule:
-    """Takes a tuple of AtomGroup objects and turns them into a single pymatgen object
-
-    Parameters
-    ----------
-    atomgroup: AtomGroup
-
-    Returns
-    -------
-    mol: Molecule
-
-    
-    """
-    if isinstance(atomgroup, tuple): 
-      # print(atomgroup)
-      atomgroup =  sum(atomgroup[-1])
-
-    elements = atomgroup.names
-    coords = atomgroup.positions  # NumPy array of shape (n_atoms, 3)
-    
-    mol = Molecule(elements, coords)
-    return mol

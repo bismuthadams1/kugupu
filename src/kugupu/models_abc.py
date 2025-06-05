@@ -1,5 +1,7 @@
 from abc import ABC, abstractmethod
 from MDAnalysis.core.groups import AtomGroup
+import numpy as np
+from typing import Any
 from MDAnalysis import Universe
 from typing import List, Type, Dict, Optional
 
@@ -48,7 +50,21 @@ class CouplingModel(ABC):
         ...
 
     @abstractmethod
-    def __call_remote__(self, u: Universe, *args, **kwds):
-        """send a call to our remote workers"""
+    def __call_remote__(
+        self,
+        top_pickle: Any,       # e.g. u._topology
+        traj_filename: str,    # e.g. u.trajectory.filename
+        frame_idx: int,        # integer frame number
+        nn_cutoff: float,
+        degeneracy: np.ndarray,
+        state: str,
+    ) -> np.ndarray:
+        """
+        Compute the coupling matrix for a single frame remotely.
+        Subclasses should rebuild the Universe on the worker via:
+        u_worker = MDAnalysis.Universe(top_pickle)
+        u_worker.load_new(traj_filename)
+        u_worker.trajectory[frame_idx]
+        then extract `u_worker.atoms.fragments` and compute H_frag.
+        """
         ...
-    
