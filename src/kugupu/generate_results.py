@@ -237,12 +237,12 @@ def coupling_matrix(u,
     """
     _check_universe(u)
 
-    if not model == 'yaehmop':
-        if client:
-          from dask.distributed import Client
-          model_instance = MODELS_AVAILABLE["ocelotml"](local=False, server_id=Client())
-        else:
-          model_instance = MODELS_AVAILABLE["ocelotml"](local=True)
+    # if not model == 'yaehmop':
+    if client:
+      from dask.distributed import Client
+      model_instance = MODELS_AVAILABLE["ocelotml"](local=False, server_id=Client())
+    else:
+      model_instance = MODELS_AVAILABLE["ocelotml"](local=True)
 
     Hs, frames = [], []
 
@@ -270,44 +270,31 @@ def coupling_matrix(u,
     for i, ts in enumerate(u.trajectory[start:stop:step]):
         logger.info("Processing frame {} of {}"
                     "".format(i + 1, nframes))
-        if model == 'yaehmop':
-          H_frag = _single_frame(u.atoms.fragments, nn_cutoff, degeneracy, state)
-        elif model == 'ocelotml':
-          if model_instance.local:
-            fragments = u.atoms.fragments
-            H_frag = model_instance(
-                fragments,
-                nn_cutoff=nn_cutoff,
-                degeneracy=degeneracy,
-                state=state,
-            )
-          else:
-            frame_idx = ts.frame
-            H_frag = model_instance(
-                top_pickle,           # remote: pass pickled topology
-                traj_filename,        # and the filename
-                frame_idx,            # and this frame index
-                nn_cutoff, 
-                degeneracy, 
-                state
-            )
+        # if model == 'yaehmop':
+        #   H_frag = _single_frame(u.atoms.fragments, nn_cutoff, degeneracy, state)
+        # elif model == 'ocelotml':
+        if model_instance.local:
+          fragments = u.atoms.fragments
+          H_frag = model_instance(
+              fragments,
+              nn_cutoff=nn_cutoff,
+              degeneracy=degeneracy,
+              state=state,
+          )
+        else:
+          frame_idx = ts.frame
+          H_frag = model_instance(
+              top_pickle,           # remote: pass pickled topology
+              traj_filename,        # and the filename
+              frame_idx,            # and this frame index
+              nn_cutoff, 
+              degeneracy, 
+              state
+          )
 
         frames.append(ts.frame)
         Hs.append(H_frag)
-    # else:
-    #       H_frag = model_instance(
-    #           u,
-    #           nn_cutoff=nn_cutoff,
-    #           degeneracy=degeneracy,
-    #           state = "HOMO",
-    #           start = start,
-    #           stop = stop,
-    #           step = step,
-    #       )
-    #       # H_frag = _ocelotl_frame(u.atoms.fragments, nn_cutoff, degeneracy)
 
-    # H_frag = np.stack(Hs)
-    # frames = np.array(frames)
     H_all = np.stack(Hs)
     frames_arr = np.array(frames)
 
