@@ -134,7 +134,7 @@ def _compute_ocelot_frame_from_fragments(
 
     return H_frag
 
-def _atomgroup_to_pymatgen_molecule(atomgroup) -> dict[tuple, PymatgenMolecule]:
+def _atomgroup_to_pymatgen_molecule(atomgroup: AtomGroup) -> dict[tuple, PymatgenMolecule]:
     """Takes a tuple of AtomGroup objects and turns them into a single pymatgen object
 
     Parameters
@@ -150,7 +150,7 @@ def _atomgroup_to_pymatgen_molecule(atomgroup) -> dict[tuple, PymatgenMolecule]:
     if isinstance(atomgroup, tuple): 
         atomgroup = sum(atomgroup[-1])
 
-    elements = atomgroup.names
+    elements = atomgroup.names # we add the names of the atoms in the jupyter notebook
     coords = atomgroup.positions  # NumPy array of shape (n_atoms, 3)
    
     return  PymatgenMolecule(elements, coords)

@@ -1,5 +1,7 @@
 from .models_abc import CouplingModel
 from typing import List, Optional
+from MDAnalysis.core.groups import AtomGroup
+from openff.toolkit.topology import Molecule
 
 
 class QCArchiveModel(CouplingModel):
@@ -28,3 +30,25 @@ class QCArchiveModel(CouplingModel):
 
     def __call_remote__(self, top_pickle, traj_filename, frame_idx, nn_cutoff, degeneracy, state):
         return super().__call_remote__(top_pickle, traj_filename, frame_idx, nn_cutoff, degeneracy, state)
+    
+
+def _prepare_qc_archive_input(
+     
+):
+  ...  
+
+def _conver_to_charge_format(
+        atomgroup: AtomGroup
+        ) -> Molecule:
+
+    atomgroup.elements
+    
+
+            
+    
+# 1 convert AtomGroups to molecules - split into grouped and individual molecules
+# 2 find method supplied
+# 3 create unique dataset name based on simulation
+# 4 ensure unique compute tag
+# 5 submit calculations -  wavefunction return, perform coupling calculations
+# 6 pull calculations when finished 
