@@ -29,6 +29,11 @@ def disable_debug_logging():
 
 disable_debug_logging()
 
+from .models_abc import MODELS_AVAILABLE, CouplingModel
+
+from .ocelotl_model import OcelotMLModel
+# from .yaehmop_model import YaehmopModel
+
 
 from .results_io import KugupuResults, save_results, load_results
 from . import time
@@ -43,3 +48,4 @@ from . import visualise
 
 from . import _version
 __version__ = _version.get_versions()['version']
+

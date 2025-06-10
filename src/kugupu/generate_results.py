@@ -18,12 +18,22 @@
 import numpy as np
 from tqdm import tqdm
 import MDAnalysis as mda
+from typing import Literal
+from ocelotml import load_models, predict_from_molecule, predict_from_list
+from pymatgen.core.structure import Molecule
+from typing import List, Dict, Any, Optional, Tuple
+
+from .models_abc import MODELS_AVAILABLE, CouplingModel
 
 from . import logger
 from . import KugupuResults
 from .dimers import find_dimers
 from ._yaehmop import run_dimer, run_fragment
 from ._hamiltonian_reduce import find_psi
+
+# ocelotml_model = load_models('hh')
+print("models available")
+print(MODELS_AVAILABLE)
 
 # Elements known to yaehmop (default eht_parms at least...)
 REF_ELEMS = set('AC AG AL AM AR AS AT AU B BA BE BI BK BR C CA CD CE CF CL CM '
@@ -59,138 +69,10 @@ def _check_universe(universe):
         raise ValueError("Unknown elements found: {} "
                          "yaehmop knows of: {}".format(new, REF_ELEMS))
 
-
-def _single_frame(fragments, nn_cutoff, degeneracy, state):
-    """Results for a single frame
-
-    Parameters
-    ----------
-    fragments : list of AtomGroup
-      all fragments in system
-    nn_cutoff : float
-      distance for dimer pairs
-    degeneracy : numpy array
-      degenerate states per fragment
-    state : str
-      'homo' or 'lumo'
-
-    Returns
-    -------
-    H_frag : numpy array
-      coupling matrix
-    """
-    # make sure that all fragments are whole
-    # ie a fragment isn't split between periodic images
-    for frag in fragments:
-        mda.lib.mdamath.make_whole(frag)
-    dimers = find_dimers(fragments, nn_cutoff)
-
-    size = degeneracy.sum()
-    H_frag = np.zeros((size, size))
-    # start and stop indices for each fragment
-    stops = np.cumsum(degeneracy)
-    starts = np.r_[0, stops[:-1]]
-    diag = np.arange(size)  # diagonal indices
-    wave = dict()  # wavefunctions for each fragment
-
-    for (i, j), ags in tqdm(sorted(dimers.items())):
-        # indices for indexing H_frag for each fragment
-        ix, iy = starts[i], stops[i]
-        jx, jy = starts[j], stops[j]
-
-        logger.debug('Calculating dimer {}-{}'.format(i, j))
-        # call Yaehmop
-        Hij, frag_i, frag_j = run_dimer(ags)
-
-        # lazily calculate the wave function for i and j
-        try:
-            # If we already did fragment i, just retrieve psi
-            psi_i = wave[i]
-        except KeyError:
-            # If we didn't have fragment i already done,
-            # calculate the state energy and wavefunction
-            e_i, psi_i = find_psi(frag_i[0], frag_i[1], frag_i[2],
-                                  state, degeneracy[i])
-            # fill diagonal with energy of states
-            # this only has to be one as self contribution does not change
-            H_frag[diag[ix:iy], diag[ix:iy]] = e_i
-            # store the wavefunction for future use
-            wave[i] = psi_i
-
-        try:
-            psi_j = wave[j]
-        except KeyError:
-            e_j, psi_j = find_psi(frag_j[0], frag_j[1], frag_j[2],
-                                  state, degeneracy[j])
-            H_frag[diag[jx:jy], diag[jx:jy]] = e_j
-            wave[j] = psi_j
-
-
-        # H = <psi_i|Hij|psi_j>
-        H_frag[ix:iy, jx:jy] = abs(psi_i.T.dot(Hij).dot(psi_j))
-        H_frag[jx:jy, ix:iy] = H_frag[ix:iy, jx:jy]
-
-    # do single fragment calculations for all missing
-    for i in (set(range(len(degeneracy))) - set(wave.keys())):
-        ix, iy = starts[i], stops[i]
-        logger.debug('Calculating lone fragment {}'.format(i))
-        H, S, ele = run_fragment(fragments[i])
-
-        e_i, psi_i = find_psi(H, S, ele, state, degeneracy[i])
-
-        H_frag[diag[ix:iy], diag[ix:iy]] = e_i
-        # don't need to save the psi for this fragment
-        #wave[i] = psi_i
-
-    return H_frag
-
-
-def _dask_single(top, trj, frame, nn_cutoff, degeneracy, state):
-    """Dask helper function for calculating a single frame
-
-    Parameters
-    ----------
-    top : pickle
-      pickled MDAnalysis Topology, usually broadcasted to workers
-    trj : str
-      filename to the trajectory file
-    frame : int
-      index of the frame to analyse
-    nn_cutoff, degeneracy, state
-      same as for _single_frame
-
-    Reheats the MDAnalysis Universe, loads correct frame then calls _single_frame
-    """
-    # load the Universe
-    u = mda.Universe(top)
-    u.load_new(trj)
-    # select correct frame
-    u.trajectory[frame]
-
-    res = _single_frame(u.atoms.fragments, nn_cutoff, degeneracy, state)
-
-    return res
-
-
-def _dask_coupling(client,
-                   u, nn_cutoff, degeneracy, state,
-                   start=None, stop=None, step=None):
-    import dask
-
-    frames = np.arange(len(u.trajectory))
-    # distribute this to all workers at start
-    future_top = client.scatter(u._topology, broadcast=True)
-
-    futures = []
-    for i in frames[start:stop:step]:
-        futures.append(dask.delayed(_dask_single)(future_top, u.trajectory.filename,
-                                                  i, nn_cutoff, degeneracy, state))
-
-    return client.compute(dask.delayed(np.stack)(futures)).result()
-
-
-def coupling_matrix(u, nn_cutoff, state, degeneracy=None,
-                    start=None, stop=None, step=None, client=None):
+def coupling_matrix(u,
+                    nn_cutoff, state, degeneracy=None,
+                    start=None, stop=None, step=None, client: Optional[bool] = None, 
+                    model: Literal['yaehmop', 'chadML'] = 'yaehmop' ):
     """Generate Hamiltonian matrix H_frag for each frame in trajectory
 
     Parameters
@@ -225,9 +107,18 @@ def coupling_matrix(u, nn_cutoff, state, degeneracy=None,
     """
     _check_universe(u)
 
+    if client:
+      from dask.distributed import Client
+      model_instance = MODELS_AVAILABLE[model](local=False, server_id=Client())
+    else:
+      model_instance = MODELS_AVAILABLE[model](local=True)
+
     Hs, frames = [], []
 
     nframes = len(u.trajectory[start:stop:step])
+    top_pickle = u._topology
+    traj_filename = u.trajectory.filename
+
     logger.info("Processing {} frames".format(nframes))
 
     if degeneracy is not None:
@@ -245,25 +136,33 @@ def coupling_matrix(u, nn_cutoff, state, degeneracy=None,
                 deg_arr[i] = degeneracy[frag.residues[0].resname]
             degeneracy = deg_arr
 
-    if client is None:
-        for i, ts in enumerate(u.trajectory[start:stop:step]):
-            logger.info("Processing frame {} of {}"
-                        "".format(i + 1, nframes))
-            H_frag = _single_frame(u.atoms.fragments, nn_cutoff, degeneracy, state)
+    for i, ts in enumerate(u.trajectory[start:stop:step]):
+        logger.info("Processing frame {} of {}"
+                    "".format(i + 1, nframes))
 
-            frames.append(ts.frame)
-            Hs.append(H_frag)
-        H_frag = np.stack(Hs)
-        frames = np.array(frames)
-    else:
-        H_frag = _dask_coupling(client, u,
-                                nn_cutoff, degeneracy, state,
-                                start, stop, step)
-        frames = np.arange(len(u.trajectory))[start:stop:step]
+        if model_instance.local:
+          fragments = u.atoms.fragments
+          H_frag = model_instance(
+              fragments,
+              nn_cutoff=nn_cutoff,
+              degeneracy=degeneracy,
+              state=state,
+          )
+        else:
+          frame_idx = ts.frame
+          H_frag = model_instance(
+              top_pickle,           # remote: pass pickled topology
+              traj_filename,        # and the filename
+              frame_idx,            # and this frame index
+              nn_cutoff, 
+              degeneracy, 
+              state
+          )
 
-    logger.info('Done!')
-    return KugupuResults(
-        frames=frames,
-        H_frag=H_frag,
-        degeneracy=degeneracy,
-    )
+        frames.append(ts.frame)
+        Hs.append(H_frag)
+
+    H_all = np.stack(Hs)
+    frames_arr = np.array(frames)
+
+    return KugupuResults(frames=frames_arr, H_frag=H_all, degeneracy=degeneracy)
