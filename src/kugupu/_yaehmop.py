@@ -48,11 +48,13 @@ def shift_dimer_images(frag_i, frag_j):
     # periodic boundaries?
     if not abs(d1 - d2) < tol:
         logger.debug("Shifting fragment")
+        print('shift')
         # calculate number of box images to shift
         shift = (c_i - c_j) / frag_i.dimensions[:3]
 
         pos_j = frag_j.positions + (np.rint(shift) * frag_i.dimensions[:3])
     else:
+        print('no shift')
         # else just take positions as-is
         pos_j = frag_j.positions
 

@@ -2,7 +2,9 @@ from .models_abc import CouplingModel
 from typing import List, Optional
 from MDAnalysis.core.groups import AtomGroup
 from openff.toolkit.topology import Molecule
-
+from MDAnalysis.transformations.wrap import unwrap
+import MDAnalysis as mda
+from kugupu.dimers import find_dimers
 
 class QCArchiveModel(CouplingModel):
     _name = "qcarchive"
@@ -18,6 +20,11 @@ class QCArchiveModel(CouplingModel):
                 )
         else:
             self.client = None
+            self.universe = None 
+            transformer = unwrap(self.universe.atoms, in_place=True)
+            # we need to stop fragmentation of molecules across periodic boundaries
+            self.transformed_universe = self.universe.trajectory.add_transformations(transformer)
+
 
     def __call_local__(
             self,
@@ -29,13 +36,24 @@ class QCArchiveModel(CouplingModel):
         pass
 
     def __call_remote__(self, top_pickle, traj_filename, frame_idx, nn_cutoff, degeneracy, state):
+
+
+
         return super().__call_remote__(top_pickle, traj_filename, frame_idx, nn_cutoff, degeneracy, state)
+    
+    def convert_to_charge_format():
+
+
     
 
 def _prepare_qc_archive_input(
-     
+     fragments: List[AtomGroup],
+     nn_cutoff: 
 ):
-  ...  
+    for frag in fragments:
+        mda.lib.mdamath.make_whole(frag)
+
+    dimers = find_dimers(fragments, nn_cutoff)
 
 def _conver_to_charge_format(
         atomgroup: AtomGroup
