@@ -48,7 +48,7 @@ def find_psi(H, S, n_electrons, state, degeneracy):
     """
     homo = int(n_electrons // 2) - 1
     if state.lower() == 'homo':
-        lo = homo - (degeneracy - 1)
+        lo = homo - (degeneracy - 1)  #degeneracy is important because the n number of homos/lumos will be the same
         hi = homo
     elif state.lower() == 'lumo':
         lo = homo + 1
@@ -59,6 +59,8 @@ def find_psi(H, S, n_electrons, state, degeneracy):
     # grab only (lo->hi) eigenvalues
     e, v = linalg.eigh(H, S, lower=False,
                        subset_by_index=[lo, hi])
+    print('v is', v)
+    print('e is', e)
 
     return e, v
 

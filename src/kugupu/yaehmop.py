@@ -110,32 +110,32 @@ def _compute_yaehmop_frame_from_fragments(
       - H_frag: 2D numpy array of shape (sum(degeneracy), sum(degeneracy))
     """
     for frag in fragments:
-        mda.lib.mdamath.make_whole(frag)
+        mda.lib.mdamath.make_whole(frag)   #stop the molecules splitting across PBCs
 
-    dimers = find_dimers(fragments, nn_cutoff)
+    dimers = find_dimers(fragments, nn_cutoff)  #get the dimers
 
-    size = int(degeneracy.sum())
+    size = int(degeneracy.sum())                #number of fragments
     H_frag = np.zeros((size, size), dtype=float)
 
-    stops = np.cumsum(degeneracy)
-    starts = np.r_[0, stops[:-1]]
-    diag_idx = np.arange(size)
+    stops = np.cumsum(degeneracy) #1,2,3,4,5, .... because degenerecy is the length of the number of fragments
+    starts = np.r_[0, stops[:-1]] #0,1,2,3,4, .... 
+    diag_idx = np.arange(size)  #size of the number fragments
 
     wave = {}
 
-    for (i, j), ag_pair in sorted(dimers.items()):
-        ix, iy = starts[i], stops[i]
-        jx, jy = starts[j], stops[j]
+    for (i, j), ag_pair in sorted(dimers.items()):  #i and j is the gragment number here
+        ix, iy = starts[i], stops[i]   
+        jx, jy = starts[j], stops[j]  #index to add fragment j and y 
 
         logger.debug(f"Yaehmop: computing dimer {i}-{j}")
-        Hij, frag_i, frag_j = run_dimer(ag_pair)
+        Hij, frag_i, frag_j = run_dimer(ag_pair)  #runs the qm calculation to find the wavefunctions, frag_n = (Hnn, Snn, ele_n)
 
         if i in wave:
             psi_i = wave[i]
             e_i = None  # energy already on diagonal
         else:
-            e_i, psi_i = find_psi(frag_i[0], frag_i[1], frag_i[2], state, degeneracy[i])
-            H_frag[diag_idx[ix:iy], diag_idx[ix:iy]] = e_i
+            e_i, psi_i = find_psi(frag_i[0], frag_i[1], frag_i[2], state, degeneracy[i]) #Find wavefunction for single fragment
+            H_frag[diag_idx[ix:iy], diag_idx[ix:iy]] = e_i   #store the H_frag 
             wave[i] = psi_i
 
         if j in wave:
@@ -143,12 +143,17 @@ def _compute_yaehmop_frame_from_fragments(
             e_j = None
         else:
             e_j, psi_j = find_psi(frag_j[0], frag_j[1], frag_j[2], state, degeneracy[j])
-            H_frag[diag_idx[jx:jy], diag_idx[jx:jy]] = e_j
+            H_frag[diag_idx[jx:jy], diag_idx[jx:jy]] = e_j  
+            print('for j bit the H_frag insert is', H_frag[diag_idx[jx:jy], diag_idx[jx:jy]])
             wave[j] = psi_j
 
-        coupling_val = abs(psi_i.T.dot(Hij).dot(psi_j))
+        coupling_val = abs(psi_i.T.dot(Hij).dot(psi_j)) #here we have <pis_i^T.Hij.psi_j>
         H_frag[ix:iy, jx:jy] = coupling_val
         H_frag[jx:jy, ix:iy] = coupling_val
+
+        #H_frag will be a square matrix of
+        # [[e_i, Hij],
+        # [[Hji, e_j]]
 
     unseen = set(range(len(degeneracy))) - set(wave.keys())
     for i in unseen:
