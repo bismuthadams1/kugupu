@@ -161,8 +161,8 @@ def _compute_yaehmop_frame_from_fragments(
         e_j =  H_frag[diag_idx[jx:jy], diag_idx[jx:jy]][0]
 
         H_eff = (
-            coupling_val -  overlap_val*(e_i - e_j
-        )/2)/(1-overlap_val**2)
+            coupling_val -  overlap_val*(e_i  + e_j)/2.0
+        )/(1.0-overlap_val**2)
 
         H_eff_frag[ix:iy, jx:jy] = H_eff
         H_eff_frag[jx:jy, ix:iy] = H_eff
