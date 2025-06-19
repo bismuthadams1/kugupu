@@ -91,13 +91,14 @@ def _compute_yaehmop_frame_from_universe(
 
     return _compute_yaehmop_frame_from_fragments(
         fragments, nn_cutoff, degeneracy, state
-    )
+    )[0]
 
 def _compute_yaehmop_frame_from_fragments(
     fragments: List[AtomGroup],
     nn_cutoff: float,
     degeneracy: np.ndarray,
     state: str,
+    return_eff: bool
 ) -> np.ndarray:
     """
     Exactly the logic of _single_frame, but factored out as a helper.
@@ -117,25 +118,28 @@ def _compute_yaehmop_frame_from_fragments(
     size = int(degeneracy.sum())                #number of fragments
     H_frag = np.zeros((size, size), dtype=float)
 
+    H_eff_frag = np.zeros((size,size), dtype=float)
+
     stops = np.cumsum(degeneracy) #1,2,3,4,5, .... because degenerecy is the length of the number of fragments
     starts = np.r_[0, stops[:-1]] #0,1,2,3,4, .... 
-    diag_idx = np.arange(size)  #size of the number fragments
+    diag_idx = np.arange(size)  #size of the number fragments 0,1,2,3,4,5, ...
 
     wave = {}
+    energies = {}
 
-    for (i, j), ag_pair in sorted(dimers.items()):  #i and j is the gragment number here
+    for (i, j), ag_pair in sorted(dimers.items()):  #i and j is the fragment number here
         ix, iy = starts[i], stops[i]   
         jx, jy = starts[j], stops[j]  #index to add fragment j and y 
 
         logger.debug(f"Yaehmop: computing dimer {i}-{j}")
-        Hij, frag_i, frag_j = run_dimer(ag_pair)  #runs the qm calculation to find the wavefunctions, frag_n = (Hnn, Snn, ele_n)
+        Hij, frag_i, frag_j, Sij = run_dimer(ag_pair)  #runs the qm calculation to find the wavefunctions, frag_n = (Hnn, Snn, ele_n)
 
         if i in wave:
             psi_i = wave[i]
             e_i = None  # energy already on diagonal
-        else:
+        else:  
             e_i, psi_i = find_psi(frag_i[0], frag_i[1], frag_i[2], state, degeneracy[i]) #Find wavefunction for single fragment
-            H_frag[diag_idx[ix:iy], diag_idx[ix:iy]] = e_i   #store the H_frag 
+            H_frag[diag_idx[ix:iy], diag_idx[ix:iy]] = e_i   #store the H_frag in the diagonal 
             wave[i] = psi_i
 
         if j in wave:
@@ -143,17 +147,25 @@ def _compute_yaehmop_frame_from_fragments(
             e_j = None
         else:
             e_j, psi_j = find_psi(frag_j[0], frag_j[1], frag_j[2], state, degeneracy[j])
-            H_frag[diag_idx[jx:jy], diag_idx[jx:jy]] = e_j  
+            H_frag[diag_idx[jx:jy], diag_idx[jx:jy]] = e_j   
             print('for j bit the H_frag insert is', H_frag[diag_idx[jx:jy], diag_idx[jx:jy]])
             wave[j] = psi_j
 
-        coupling_val = abs(psi_i.T.dot(Hij).dot(psi_j)) #here we have <pis_i^T.Hij.psi_j>
-        H_frag[ix:iy, jx:jy] = coupling_val
+        coupling_val = abs(psi_i.T.dot(Hij).dot(psi_j)) #psi_i^T.Hij.psi_j, store the coupling val 
+        overlap_val = abs(psi_i.T.dot(Sij).dot(psi_j)) #ie Sij
+
+        H_frag[ix:iy, jx:jy] = coupling_val #store the coupling vals in the diagonal 
         H_frag[jx:jy, ix:iy] = coupling_val
 
-        #H_frag will be a square matrix of
-        # [[e_i, Hij],
-        # [[Hji, e_j]]
+        e_i = H_frag[diag_idx[ix:iy], diag_idx[ix:iy]][0]
+        e_j =  H_frag[diag_idx[jx:jy], diag_idx[jx:jy]][0]
+
+        H_eff = (
+            coupling_val -  overlap_val*(e_i - e_j
+        )/2)/(1-overlap_val**2)
+
+        H_eff_frag[ix:iy, jx:jy] = H_eff
+        H_eff_frag[jx:jy, ix:iy] = H_eff
 
     unseen = set(range(len(degeneracy))) - set(wave.keys())
     for i in unseen:
@@ -163,4 +175,4 @@ def _compute_yaehmop_frame_from_fragments(
         e_i, psi_i = find_psi(H_mat, S_mat, ele, state, degeneracy[i])
         H_frag[diag_idx[ix:iy], diag_idx[ix:iy]] = e_i
 
-    return H_frag
+    return H_frag, H_eff_frag

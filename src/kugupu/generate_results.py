@@ -121,7 +121,7 @@ def coupling_matrix(u,
 
     logger.info("Processing {} frames".format(nframes))
 
-    if degeneracy is not None:
+    if degeneracy is not None: #don't need to detect degenerecy
         # we need to pass a vector n_frags long
         if isinstance(degeneracy, int):
             # if only one value is given the elements are all the same
@@ -142,7 +142,7 @@ def coupling_matrix(u,
 
         if model_instance.local:
           fragments = u.atoms.fragments
-          H_frag = model_instance(
+          H_frag, H_eff = model_instance(
               fragments,
               nn_cutoff=nn_cutoff,
               degeneracy=degeneracy,
@@ -150,7 +150,7 @@ def coupling_matrix(u,
           )
         else:
           frame_idx = ts.frame
-          H_frag = model_instance(
+          H_frag, H_eff = model_instance(
               top_pickle,           # remote: pass pickled topology
               traj_filename,        # and the filename
               frame_idx,            # and this frame index

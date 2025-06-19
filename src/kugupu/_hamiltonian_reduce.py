@@ -319,3 +319,4 @@ def calculate_H_frag(dimers, fragsize, H_orb, S_orb, state, degeneracy=None):
         return H_frag, degeneracy
     else:
         return H_frag
+

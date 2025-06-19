@@ -153,6 +153,7 @@ def run_dimer(ags):
     Sii = S_mat[:orb_i, :orb_i]
     Hjj = H_mat[orb_i:, orb_i:]
     Sjj = S_mat[orb_i:, orb_i:]
-    print('Hii is', Hii)
-    print('Hij is', Hij)
-    return Hij, (Hii, Sii, ele_i), (Hjj, Sjj, ele_j)
+    Sij = S_mat[:orb_i,orb_i:]
+
+    return Hij, (Hii, Sii, ele_i), (Hjj, Sjj, ele_j), Sij
+
