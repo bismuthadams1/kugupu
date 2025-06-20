@@ -28,7 +28,8 @@ from . import __version__
 KugupuResults = namedtuple("KugupuResults",
                            ['frames',
                             'H_frag',
-                            'degeneracy'])
+                            'degeneracy',
+                            'H_eff'])
 
 _DATEFORMAT = '%Y-%m-%d %H:%M:%S'
 
@@ -55,6 +56,7 @@ def save_results(filename, results):
         f['frames'] = results.frames
         f['H_frag'] = results.H_frag
         f['degeneracy'] = results.degeneracy
+        f['H_eff'] = results.H_eff
 
 
 def load_results(filename):
@@ -83,11 +85,13 @@ def load_results(filename):
         idx = f['frames'][()]
         H_frag = f['H_frag'][()]
         deg = f['degeneracy'][()]
+        H_eff = f['H_eff'][()]
 
     return KugupuResults(
         frames=idx,
         H_frag=H_frag,
         degeneracy=deg,
+        H_eff=H_eff,
     )
 
 
@@ -111,8 +115,11 @@ def concatenate_results(*results):
 
     H_frag = np.concatenate([r.H_frag for r in results])
 
+    H_eff = np.concatenate([r.H_eff for r in results])
+
     return KugupuResults(
         frames=frames,
         H_frag=H_frag,
         degeneracy=results[0].degeneracy,
+        H_eff = H_eff,
     )

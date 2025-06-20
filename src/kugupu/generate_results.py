@@ -113,7 +113,7 @@ def coupling_matrix(u,
     else:
       model_instance = MODELS_AVAILABLE[model](local=True)
 
-    Hs, frames = [], []
+    Hs, frames, Heffs = [], [], []
 
     nframes = len(u.trajectory[start:stop:step])
     top_pickle = u._topology
@@ -161,8 +161,10 @@ def coupling_matrix(u,
 
         frames.append(ts.frame)
         Hs.append(H_frag)
+        Heffs.append(H_eff)
 
     H_all = np.stack(Hs)
     frames_arr = np.array(frames)
+    H_eff_all = np.stack(Heffs)
 
-    return KugupuResults(frames=frames_arr, H_frag=H_all, degeneracy=degeneracy)
+    return KugupuResults(frames=frames_arr, H_frag=H_all, degeneracy=degeneracy, H_eff = H_eff_all)

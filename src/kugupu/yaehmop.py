@@ -98,7 +98,6 @@ def _compute_yaehmop_frame_from_fragments(
     nn_cutoff: float,
     degeneracy: np.ndarray,
     state: str,
-    return_eff: bool
 ) -> np.ndarray:
     """
     Exactly the logic of _single_frame, but factored out as a helper.
