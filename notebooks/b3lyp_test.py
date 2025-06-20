@@ -51,8 +51,8 @@ def main():
     hi = homo
     lo = homo
 
-    nbf = wfn.nbf()
-    orb_i = nbf // 2
+    nmo = wfn.nmo()
+    orb_i = nmo // 2
 
     Hii = F[:orb_i, :orb_i]
     Sii = S[:orb_i, :orb_i]
