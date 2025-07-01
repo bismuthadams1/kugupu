@@ -435,7 +435,7 @@ dependencies:
       - omegaconf==2.3.0
       - openpyxl==3.1.5
       - protobuf==6.30.2
-      - pyscf==2.8.0
+      - pyscf
       - rdkit-pypi==2022.9.5
       - shap==0.47.1
       - slicer==0.0.8
