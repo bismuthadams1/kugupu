@@ -309,6 +309,7 @@ dependencies:
   - pyobjc-framework-cocoa=11.0
   - pyparsing=3.2.3
   - pysocks=1.7.1
+  - pyscf
   - pytest=8.3.5
   - python=3.10.17
   - python-constraint=1.4.0
@@ -435,7 +436,6 @@ dependencies:
       - omegaconf==2.3.0
       - openpyxl==3.1.5
       - protobuf==6.30.2
-      - pyscf
       - rdkit-pypi==2022.9.5
       - shap==0.47.1
       - slicer==0.0.8
