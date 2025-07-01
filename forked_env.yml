@@ -1,4 +1,4 @@
-name: /Users/k2584788/.local/share/mamba/envs/forked_kugupu
+name: forked_kugupu
 channels:
   - conda-forge
   - https://repo.anaconda.com/pkgs/main
