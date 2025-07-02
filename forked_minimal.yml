@@ -1,0 +1,44 @@
+name: forked_kugupu
+channels:
+  - conda-forge
+dependencies:
+  - cython
+  - dftbplus[build="nompi_*"]
+  - distributed
+  - docopt
+  - h5py
+  - ipykernel
+  - jupyter
+  - lifelines
+  - loguru
+  - mdanalysis
+  - meson
+  - nglview
+  - ninja
+  - numpy==1.26.4
+  - openff-qcsubmit
+  - pip
+  - psi4
+  - pymatgen
+  - pytest
+  - python=3.10
+  - pytorch
+  - pyyaml
+  - qcfractal
+  - qcportal
+  - tblite
+  - tblite-python
+  - tqdm
+  - wheel
+  - xtb-python
+  - yaehmop
+  - pip:
+    - dive_into_graphs==1.0.0
+    - more-itertools==10.6.0
+    - tensorboard==2.19.0
+    - torch-geometric==2.6.1
+    - torch_cluster==1.6.3
+    - torch_scatter==2.1.2
+    - torch_sparse==0.6.18
+    - torch_spline_conv==1.2.2
+

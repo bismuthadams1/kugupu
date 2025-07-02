@@ -420,7 +420,7 @@ dependencies:
       - antlr4-python3-runtime
       - captum
       - cilog
-      - dive-into-graphs
+      - dive-into-graphs==1.1.0
       - et-xmlfile
       - frozenlist
       - gdown
