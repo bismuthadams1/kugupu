@@ -33,7 +33,7 @@ dependencies:
   - xtb-python
   - yaehmop
   - pip:
-    - dive_into_graphs #==1.0.0
+    - dive_into_graphs==1.1.0
     - more-itertools #==10.6.0
     - tensorboard #==2.19.0
     - torch-geometric #==2.6.1
