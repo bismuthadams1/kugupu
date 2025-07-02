@@ -1,0 +1,9 @@
+dive_into_graphs==1.0.0
+more-itertools==10.6.0
+tensorboard==2.19.0
+torch-geometric==2.6.1
+torch_cluster==1.6.3
+torch_scatter==2.1.2
+torch_sparse==0.6.18
+torch_spline_conv==1.2.2
+git+https://github.com/bismuthadams1/ocelotml_coupling
