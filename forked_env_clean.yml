@@ -309,7 +309,7 @@ dependencies:
   - pyobjc-framework-cocoa
   - pyparsing
   - pysocks
-  - pyscf
+  # - pyscf
   - pytest
   - python
   - python-constraint
