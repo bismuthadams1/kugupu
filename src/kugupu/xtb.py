@@ -6,11 +6,17 @@ import MDAnalysis as mda
 from MDAnalysis import AtomGroup
 from rdkit.Chem import rdmolfiles
 import tempfile
+import subprocess
+import os
+import re
 
 
 
 from .dimers import find_dimers
 
+class XTBError(Exception):
+    """Custom exception for xTB-related errors."""
+    pass
 
 
 class XTB(CouplingModel):
@@ -27,6 +33,27 @@ class XTB(CouplingModel):
                         )
             else:
                 self.client = None
+    
+    def __call_local__(
+            self, 
+            fragments: List[AtomGroup],
+            nn_cutoff: float,
+            degeneracy: np.ndarray,
+            state: Optional[str] = 'homo' #this is where we can pick between models
+            ,
+            ) -> np.ndarray:
+        """
+        Build H_frag from scratch using OcelotML (predict_from_list/predict_from_molecule).
+        Expected kwds: nn_cutoff (float), degeneracy (1D array), state unused here.
+        """
+
+        return _compute_xtb_frame_from_fragments(
+            fragments =fragments,
+            nn_cutoff = nn_cutoff,
+            degeneracy = degeneracy,
+            state = state
+        )
+        
 
 def _atomgroup_to_xyz(
     atomlist: AtomGroup,
@@ -68,17 +95,18 @@ def _convert_to_model_format(
 
     dimers = find_dimers(fragments, nn_cutoff)
 
-    dimers_pymat: Dict[tuple, str] = {}
+    dimers_xyz: Dict[tuple, str] = {}
     for (i, j), ag_pair in dimers.items():
         mol = _atomgroup_to_xyz(ag_pair)
-        dimers_pymat[(i,j)] = mol
+        dimers_xyz[(i,j)] = mol
 
-    return dimers_pymat
+    return dimers_xyz
 
 def _compute_xtb_frame_from_fragments(
         fragments: List[AtomGroup],
         nn_cutoff: float,
         degeneracy: np.ndarray,
+        ,
         state: str,  #implement soon      
 ) -> np.ndarray:
     dimers_dict = _convert_to_model_format(fragments, nn_cutoff)
@@ -110,31 +138,80 @@ def _compute_xtb_frame_from_fragments(
 
     return H_frag, None
 
+#OVERIDE THIS WHEN XTB COMPILES
+XTB_EXECUTABLE = '/Users/k2584788/Downloads/xtb-bleed 2/build/xtb'
+
 def _xtb_from_list(
-    dimers_list: List[str],
-    mode: Literal['homo','lumo'],
-    flavour: Literal['gfn1-XTB','gfn2-XTB','gfn'],
-    threshold: float,
-)-> tuple[int,]:
-    
-    flavour_dict ={
-        'gfn1-XTB':''
+    dimers: List[str],
+    mode: Literal['homo', 'lumo'] = 'homo',
+    flavour: Literal['gfn1-XTB', 'gfn2-XTB'] = 'gfn1-XTB',
+    threshold: float = 0.1,
+    xtb_executable: str = XTB_EXECUTABLE
+) -> Tuple[float, ...]:
+    """
+    Run xTB DIPRO calculations on a list of dimer geometries (XYZ strings).
+
+    Parameters
+    ----------
+        dimers: List of XYZ-format strings for each dimer.
+        mode: 'homo' to extract hole-transport coupling, 'lumo' for electron-transport coupling.
+        flavour: xTB flavor, either 'gfn1-XTB' or 'gfn2-XTB'.
+        threshold: DIPRO energy-threshold in eV (used with --dipro).
+        xtb_executable: Path or name of the xTB binary.
+
+    Returns
+    -------
+        Tuple of coupling values (in eV) for each dimer in the same order.
+
+    Raises:
+        XTBError: If xTB returns a non-zero exit code or parsing fails.
+    """
+    flavour_flags = {
+        'gfn1-XTB': ['--gfn', '1'],
+        'gfn2-XTB': ['--gfn', '2']
     }
+    if flavour not in flavour_flags:
+        raise ValueError(f"Unsupported xTB flavour: {flavour}")
 
-    try:
-        flavour_cmd = flavour_dict[flavour]
-    except KeyError:
-        raise "Non-existent xtb flavour provided"
+    results: List[float] = []
+    patterns = {
+        'homo': re.compile(r"total \|J\(AB,eff\)\| for hole transport.*?:\s*([0-9.]+) eV", re.IGNORECASE),
+        'lumo': re.compile(r"total \|J\(AB,eff\)\| for charge transport.*?:\s*([0-9.]+) eV", re.IGNORECASE),
+    }
+    pattern = patterns[mode]
 
-    
-    for dimer in dimers_list:
-        with tempfile.NamedTemporaryFile() as fp:
-            fp.write(dimer)
+    for idx, xyz_str in enumerate(dimers):
+        with tempfile.NamedTemporaryFile(suffix='.xyz', delete=False, mode='w') as tmp:
+            tmp.write(xyz_str)
+            tmp_filename = tmp.name
 
-            cmd = f"xtb {fp.name}.xyz --dipro {} {}"
+        cmd = [xtb_executable, tmp_filename, '--dipro', str(threshold)] + flavour_flags[flavour]
+        try:
+            completed = subprocess.run(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                check=False
+            )
+        except FileNotFoundError as e:
+            os.remove(tmp_filename)
+            raise XTBError(f"xTB executable not found: {xtb_executable}") from e
 
+        os.remove(tmp_filename)
 
+        if completed.returncode != 0:
+            raise XTBError(f"xTB failed for dimer index {idx}, exit code {completed.returncode}: {completed.stdout}")
 
+        # Parse the coupling value
+        match = pattern.search(completed.stdout)
+        if not match:
+            raise XTBError(f"Failed to parse coupling for dimer index {idx}. Output:\n{completed.stdout}")
+
+        coupling_value = float(match.group(1))
+        results.append(coupling_value)
+
+    return tuple(results)
     
     
 
