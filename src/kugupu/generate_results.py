@@ -22,6 +22,7 @@ from typing import Literal
 from ocelotml import load_models, predict_from_molecule, predict_from_list
 from pymatgen.core.structure import Molecule
 from typing import List, Dict, Any, Optional, Tuple
+from enum import Enum
 
 from .models_abc import MODELS_AVAILABLE, CouplingModel
 
@@ -34,6 +35,13 @@ from ._hamiltonian_reduce import find_psi
 # ocelotml_model = load_models('hh')
 print("models available")
 print(MODELS_AVAILABLE)
+
+Models = Enum(
+    "Models",
+    { name: name for name in MODELS_AVAILABLE.keys() },
+    type=str,
+)
+
 
 # Elements known to yaehmop (default eht_parms at least...)
 REF_ELEMS = set('AC AG AL AM AR AS AT AU B BA BE BI BK BR C CA CD CE CF CL CM '
@@ -72,7 +80,7 @@ def _check_universe(universe):
 def coupling_matrix(u,
                     nn_cutoff, state, degeneracy=None,
                     start=None, stop=None, step=None, client: Optional[bool] = None, 
-                    model: Literal['yaehmop', 'chadML'] = 'yaehmop' ):
+                    model: Models = Models.yaehmop ):
     """Generate Hamiltonian matrix H_frag for each frame in trajectory
 
     Parameters

@@ -1,4 +1,4 @@
-from models_abc import CouplingModel
+from .models_abc import CouplingModel
 import numpy as np
 from typing import List, Dict, Optional, Tuple, Any, Literal
 from MDAnalysis.core.groups import AtomGroup
@@ -9,8 +9,10 @@ import tempfile
 import subprocess
 import os
 import re
+from tqdm import tqdm
+import pickle as pkl
 
-
+from . import logger
 
 from .dimers import find_dimers
 
@@ -22,25 +24,25 @@ class XTBError(Exception):
 class XTB(CouplingModel):
     _name = 'xtb'
 
-    def __init__(self, *, local: bool = True):
-        super().__init__(local=local, server_id=server_id):
-            if not self.local:
-                if hasattr(self.server_id, "submit"):
-                    self.client = self.server_id
-                else:
-                    raise ValueError(
-                        "Please provide a dask client"
-                        )
+    def __init__(self, *, local: bool = True, server_id: Optional["distributed.Client"] = None):
+        super().__init__(local=local, server_id=server_id)
+        if not self.local:
+            if hasattr(self.server_id, "submit"):
+                self.client = self.server_id
             else:
-                self.client = None
+                raise ValueError(
+                    "Please provide a dask client"
+                    )
+        else:
+            self.client = None
     
     def __call_local__(
             self, 
             fragments: List[AtomGroup],
             nn_cutoff: float,
             degeneracy: np.ndarray,
-            state: Optional[str] = 'homo' #this is where we can pick between models
-            ,
+            state: Optional[str] = 'homo', #this is where we can pick between models
+            xtb_model: Literal['gfn1-XTB', 'gfn2-XTB'] = 'gfn1-XTB',
             ) -> np.ndarray:
         """
         Build H_frag from scratch using OcelotML (predict_from_list/predict_from_molecule).
@@ -51,12 +53,40 @@ class XTB(CouplingModel):
             fragments =fragments,
             nn_cutoff = nn_cutoff,
             degeneracy = degeneracy,
-            state = state
+            state = state,
+            xtb_model = xtb_model
         )
         
+    def __call_remote__(
+        self,
+        top_pickle: pkl,
+        traj_filename: str,
+        frame_idx: int,
+        nn_cutoff: float,
+        degeneracy: np.ndarray,
+        state: str,
+    ) -> np.ndarray:
+        """
+        Remote/Dask path for a single frame.  We:
+          1) Scatter `top_pickle` once (so workers can rebuild Universe).
+          2) Submit one delayed task (`_dask_single_universe`) to compute H_frag on that worker.
+          3) Return the resulting H_frag array.
+
+        Expected keyword arguments (in **kwds):
+          - nn_cutoff (float)
+          - degeneracy (np.ndarray of ints)
+          - state (str)
+          - start, stop, step  [these are ignored here, because this is per‐frame]
+        """
+
+        u_worker = mda.Universe(top_pickle)
+        u_worker.load_new(traj_filename)
+        u_worker.trajectory[frame_idx]
+        fragments = u_worker.atoms.fragments
+        return self.__call_local__(fragments, nn_cutoff, degeneracy, state)
 
 def _atomgroup_to_xyz(
-    atomlist: AtomGroup,
+    atomgroup: AtomGroup,
 ) -> str:
     """Convert an MDAnalysis Atomgroup to an xyz
 
@@ -69,7 +99,10 @@ def _atomgroup_to_xyz(
     -------
     
     """
-    rdkit_mol = atomlist.convert_to.rdkit()
+    if isinstance(atomgroup, tuple): 
+        atomgroup = sum(atomgroup[-1])
+
+    rdkit_mol = atomgroup.convert_to.rdkit()
     xyz_block = rdmolfiles.MolToXYZBlock(rdkit_mol)
 
     return xyz_block
@@ -86,7 +119,6 @@ def _convert_to_model_format(
 
     Returns
     -------
-
 
     """
 
@@ -106,8 +138,8 @@ def _compute_xtb_frame_from_fragments(
         fragments: List[AtomGroup],
         nn_cutoff: float,
         degeneracy: np.ndarray,
-        ,
-        state: str,  #implement soon      
+        xtb_model: Literal['gfn1-XTB', 'gfn2-XTB'] = 'gfn1-XTB',
+        state: Literal['homo', 'lumo'] = 'homo',  
 ) -> np.ndarray:
     dimers_dict = _convert_to_model_format(fragments, nn_cutoff)
     size = degeneracy.sum()
@@ -118,7 +150,11 @@ def _compute_xtb_frame_from_fragments(
     wave = dict()  # in OcelotML scenario, we just store a dummy
 
     all_mols = list(dimers_dict.values())
-    predictions = _xtb_from_list(all_mols, ocelotml_model)
+    predictions = _xtb_from_list(
+        dimers = all_mols,
+        mode = state,
+        flavour= xtb_model,
+        )
 
     for idx, ((i, j), mol) in enumerate(dimers_dict.items()):
         ix, iy = starts[i], stops[i]
@@ -132,8 +168,12 @@ def _compute_xtb_frame_from_fragments(
 
     for i in (set(range(len(degeneracy))) - set(wave.keys())):
         ix, iy = starts[i], stops[i]
-        single_mol = _atomgroup_to_pymatgen_molecule(fragments[i])
-        e_i = predict_from_molecule(molecule=single_mol, model=ocelotml_model)
+        single_mol = _atomgroup_to_xyz(fragments[i])
+        e_i = _xtb_from_list(
+            molecule=single_mol,
+            mode = state,
+            flavour= xtb_model,
+        )
         H_frag[diag[ix:iy], diag[ix:iy]] = e_i
 
     return H_frag, None
@@ -163,7 +203,8 @@ def _xtb_from_list(
     -------
         Tuple of coupling values (in eV) for each dimer in the same order.
 
-    Raises:
+    Raises
+    ------
         XTBError: If xTB returns a non-zero exit code or parsing fails.
     """
     flavour_flags = {
@@ -179,13 +220,15 @@ def _xtb_from_list(
         'lumo': re.compile(r"total \|J\(AB,eff\)\| for charge transport.*?:\s*([0-9.]+) eV", re.IGNORECASE),
     }
     pattern = patterns[mode]
-
-    for idx, xyz_str in enumerate(dimers):
+    
+    logger.info('running xtb DIPRO coupling across dimers')
+    for idx, xyz_str in tqdm(enumerate(dimers), total = len(dimers)):
         with tempfile.NamedTemporaryFile(suffix='.xyz', delete=False, mode='w') as tmp:
             tmp.write(xyz_str)
             tmp_filename = tmp.name
 
         cmd = [xtb_executable, tmp_filename, '--dipro', str(threshold)] + flavour_flags[flavour]
+        logger.info(cmd)
         try:
             completed = subprocess.run(
                 cmd,
@@ -203,7 +246,6 @@ def _xtb_from_list(
         if completed.returncode != 0:
             raise XTBError(f"xTB failed for dimer index {idx}, exit code {completed.returncode}: {completed.stdout}")
 
-        # Parse the coupling value
         match = pattern.search(completed.stdout)
         if not match:
             raise XTBError(f"Failed to parse coupling for dimer index {idx}. Output:\n{completed.stdout}")
@@ -213,8 +255,3 @@ def _xtb_from_list(
 
     return tuple(results)
     
-    
-
-def _parse_xtb_outpus(
-        
-)

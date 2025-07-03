@@ -33,6 +33,7 @@ from .models_abc import MODELS_AVAILABLE, CouplingModel
 
 from .ocelotl_model import OcelotMLModel
 from .yaehmop import YaehmopModel
+from .xtb import XTB
 
 
 from .results_io import KugupuResults, save_results, load_results
