@@ -80,7 +80,9 @@ def _check_universe(universe):
 def coupling_matrix(u,
                     nn_cutoff, state, degeneracy=None,
                     start=None, stop=None, step=None, client: Optional[bool] = None, 
-                    model: Models = Models.yaehmop ):
+                    model: Models = Models.yaehmop,
+                    **model_kwargs
+):
     """Generate Hamiltonian matrix H_frag for each frame in trajectory
 
     Parameters
@@ -117,9 +119,9 @@ def coupling_matrix(u,
 
     if client:
       from dask.distributed import Client
-      model_instance = MODELS_AVAILABLE[model](local=False, server_id=Client())
+      model_instance = MODELS_AVAILABLE[model](local=False, server_id=Client(),  **model_kwargs)
     else:
-      model_instance = MODELS_AVAILABLE[model](local=True)
+      model_instance = MODELS_AVAILABLE[model](local=True,  **model_kwargs)
 
     Hs, frames, Heffs = [], [], []
 

@@ -24,12 +24,15 @@ import h5py
 from . import logger
 from . import __version__
 
-
-KugupuResults = namedtuple("KugupuResults",
-                           ['frames',
-                            'H_frag',
-                            'degeneracy',
-                            'H_eff'])
+fields = ['frames',
+          'H_frag',
+          'degeneracy',
+          'H_eff']
+KugupuResults = namedtuple(
+    "KugupuResults",
+    fields,
+    defaults=(None,)
+)
 
 _DATEFORMAT = '%Y-%m-%d %H:%M:%S'
 
@@ -85,7 +88,11 @@ def load_results(filename):
         idx = f['frames'][()]
         H_frag = f['H_frag'][()]
         deg = f['degeneracy'][()]
-        H_eff = f['H_eff'][()]
+        try:
+          H_eff = f['H_eff'][()]
+        except KeyError:
+          logger.info('no H_eff in this file')
+          H_eff = None
 
     return KugupuResults(
         frames=idx,

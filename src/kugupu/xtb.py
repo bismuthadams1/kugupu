@@ -24,7 +24,7 @@ class XTBError(Exception):
 class XTB(CouplingModel):
     _name = 'xtb'
 
-    def __init__(self, *, local: bool = True, server_id: Optional["distributed.Client"] = None):
+    def __init__(self, *, local: bool = True, server_id: Optional["distributed.Client"] = None, xtb_model = 'gfn1-XTB'):
         super().__init__(local=local, server_id=server_id)
         if not self.local:
             if hasattr(self.server_id, "submit"):
@@ -35,6 +35,7 @@ class XTB(CouplingModel):
                     )
         else:
             self.client = None
+        self.xtb_model = xtb_model
     
     def __call_local__(
             self, 
@@ -42,7 +43,6 @@ class XTB(CouplingModel):
             nn_cutoff: float,
             degeneracy: np.ndarray,
             state: Optional[str] = 'homo', #this is where we can pick between models
-            xtb_model: Literal['gfn1-XTB', 'gfn2-XTB'] = 'gfn1-XTB',
             ) -> np.ndarray:
         """
         Build H_frag from scratch using OcelotML (predict_from_list/predict_from_molecule).
@@ -50,11 +50,11 @@ class XTB(CouplingModel):
         """
 
         return _compute_xtb_frame_from_fragments(
-            fragments =fragments,
+            xtb_model = self.xtb_model,
+            fragments = fragments,
             nn_cutoff = nn_cutoff,
             degeneracy = degeneracy,
             state = state,
-            xtb_model = xtb_model
         )
         
     def __call_remote__(
