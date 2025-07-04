@@ -11,6 +11,9 @@ import os
 import re
 from tqdm import tqdm
 import pickle as pkl
+from MDAnalysis.topology.guessers import guess_types
+
+from ._yaehmop import shift_dimer_images
 
 from . import logger
 
@@ -80,6 +83,8 @@ class XTB(CouplingModel):
         """
 
         u_worker = mda.Universe(top_pickle)
+        elements = guess_types(u.atoms.names)
+        u_worker.add_TopologyAttr("elements", elements)
         u_worker.load_new(traj_filename)
         u_worker.trajectory[frame_idx]
         fragments = u_worker.atoms.fragments
@@ -99,11 +104,24 @@ def _atomgroup_to_xyz(
     -------
     
     """
-    if isinstance(atomgroup, tuple): 
-        atomgroup = sum(atomgroup[-1])
+    # if isinstance(atomgroup, tuple): 
+    #     atomgroup = sum(atomgroup[-1])
 
-    rdkit_mol = atomgroup.convert_to.rdkit()
-    xyz_block = rdmolfiles.MolToXYZBlock(rdkit_mol)
+    # rdkit_mol = atomgroup.convert_to.rdkit()
+    # xyz_block = rdmolfiles.MolToXYZBlock(rdkit_mol)
+    elements = atomgroup.elements  # faster than atomgroup.names if elements available
+    if len(atomgroup) == 2:
+        positions = shift_dimer_images(atomgroup[0], atomgroup[1])
+    else:
+        positions = atomgroup.positions
+
+
+    # Prepare formatted XYZ string
+    lines = [f"{len(atomgroup)}"]
+    lines += [f"{el} {x:.8f} {y:.8f} {z:.8f}"
+              for el, (x, y, z) in zip(elements, positions)]
+
+    xyz_block = "\n".join(lines)
 
     return xyz_block
 
@@ -112,7 +130,7 @@ def _convert_to_model_format(
     nn_cutoff: float
     ) -> Dict[tuple,str]:
     """
-    Find all dimer pairs within nn_cutoff, and convert each pair into a Pymatgen Molecule.
+    Find all dimer pairs within nn_cutoff, and convert each pair into a xyz block
 
     Parameters
     ----------
@@ -128,7 +146,8 @@ def _convert_to_model_format(
     dimers = find_dimers(fragments, nn_cutoff)
 
     dimers_xyz: Dict[tuple, str] = {}
-    for (i, j), ag_pair in dimers.items():
+    logger.info('converting to xyz format')
+    for (i, j), ag_pair in tqdm(dimers.items(), total=len(dimers.items()), desc='converting mdanalysis atoms to xyz'):
         mol = _atomgroup_to_xyz(ag_pair)
         dimers_xyz[(i,j)] = mol
 
@@ -150,6 +169,7 @@ def _compute_xtb_frame_from_fragments(
     wave = dict()  # in OcelotML scenario, we just store a dummy
 
     all_mols = list(dimers_dict.values())
+    logger.info('running through dimer list')
     predictions = _xtb_from_list(
         dimers = all_mols,
         mode = state,
@@ -222,6 +242,7 @@ def _xtb_from_list(
     pattern = patterns[mode]
     
     logger.info('running xtb DIPRO coupling across dimers')
+    print('xtb run', flush=True)
     for idx, xyz_str in tqdm(enumerate(dimers), total = len(dimers)):
         with tempfile.NamedTemporaryFile(suffix='.xyz', delete=False, mode='w') as tmp:
             tmp.write(xyz_str)
@@ -244,6 +265,8 @@ def _xtb_from_list(
         os.remove(tmp_filename)
 
         if completed.returncode != 0:
+            print('failed molecule', xyz_str)
+
             raise XTBError(f"xTB failed for dimer index {idx}, exit code {completed.returncode}: {completed.stdout}")
 
         match = pattern.search(completed.stdout)

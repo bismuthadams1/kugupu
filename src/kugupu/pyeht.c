@@ -4,8 +4,8 @@
 {
     "distutils": {
         "depends": [
-            "/Users/k2584788/.local/share/mamba/envs/forked_minimal/include/yaehmop/bind.h",
-            "/Users/k2584788/.local/share/mamba/envs/forked_minimal/include/yaehmop/prototypes.h"
+            "/Users/k2584788/.local/share/mamba/envs/kugupu_working/include/yaehmop/bind.h",
+            "/Users/k2584788/.local/share/mamba/envs/kugupu_working/include/yaehmop/prototypes.h"
         ],
         "extra_compile_args": [
             "-std=c99",
@@ -13,7 +13,7 @@
             "-O3"
         ],
         "include_dirs": [
-            "/Users/k2584788/.local/share/mamba/envs/forked_minimal/include",
+            "/Users/k2584788/.local/share/mamba/envs/kugupu_working/include",
             "/Users/k2584788/.local/share/mamba/envs/kgp/include"
         ],
         "libraries": [

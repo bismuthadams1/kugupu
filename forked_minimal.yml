@@ -15,13 +15,13 @@ dependencies:
   - meson
   - nglview
   - ninja
-  - numpy==1.26.4
+  - numpy #==1.26.4
   - openff-qcsubmit
   - pip
   - psi4
   - pymatgen
   - pytest
-  - python=3.10
+  - python
   - pytorch
   - pyyaml
   - qcfractal

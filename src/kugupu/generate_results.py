@@ -23,6 +23,9 @@ from ocelotml import load_models, predict_from_molecule, predict_from_list
 from pymatgen.core.structure import Molecule
 from typing import List, Dict, Any, Optional, Tuple
 from enum import Enum
+from MDAnalysis.topology.guessers import guess_types
+from MDAnalysis.transformations.wrap import unwrap
+
 
 from .models_abc import MODELS_AVAILABLE, CouplingModel
 
@@ -36,11 +39,7 @@ from ._hamiltonian_reduce import find_psi
 print("models available")
 print(MODELS_AVAILABLE)
 
-Models = Enum(
-    "Models",
-    { name: name for name in MODELS_AVAILABLE.keys() },
-    type=str,
-)
+
 
 
 # Elements known to yaehmop (default eht_parms at least...)
@@ -80,7 +79,7 @@ def _check_universe(universe):
 def coupling_matrix(u,
                     nn_cutoff, state, degeneracy=None,
                     start=None, stop=None, step=None, client: Optional[bool] = None, 
-                    model: Models = Models.yaehmop,
+                    model: str = 'yaehmop',
                     **model_kwargs
 ):
     """Generate Hamiltonian matrix H_frag for each frame in trajectory
@@ -122,12 +121,19 @@ def coupling_matrix(u,
       model_instance = MODELS_AVAILABLE[model](local=False, server_id=Client(),  **model_kwargs)
     else:
       model_instance = MODELS_AVAILABLE[model](local=True,  **model_kwargs)
-
+    logger.info(f'running model: {model}')
     Hs, frames, Heffs = [], [], []
 
     nframes = len(u.trajectory[start:stop:step])
     top_pickle = u._topology
     traj_filename = u.trajectory.filename
+    elements = guess_types(u.atoms.names)
+    u.add_TopologyAttr("elements", elements)
+    #remove periodic boundaries
+    ag = u.atoms
+    transform = mda.transformations.unwrap(ag)
+    u.trajectory.add_transformations(transform)
+
 
     logger.info("Processing {} frames".format(nframes))
 
@@ -151,6 +157,7 @@ def coupling_matrix(u,
                     "".format(i + 1, nframes))
 
         if model_instance.local:
+          logger.info("Running in Serial")
           fragments = u.atoms.fragments
           H_frag, H_eff = model_instance(
               fragments,
@@ -159,6 +166,7 @@ def coupling_matrix(u,
               state=state,
           )
         else:
+          logger.info("Running in Parallel")
           frame_idx = ts.frame
           H_frag, H_eff = model_instance(
               top_pickle,           # remote: pass pickled topology

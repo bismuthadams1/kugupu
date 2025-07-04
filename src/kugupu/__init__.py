@@ -26,6 +26,8 @@ def disable_debug_logging():
     """Use a normal amount of logging"""
     logger.remove()
     logger.add(sys.stderr, format="{time} {level} {message}", level="INFO")
+    # logger.add(sys.stdout, format="{time} {level} {message}", level="INFO")
+
 
 disable_debug_logging()
 
@@ -45,7 +47,7 @@ from . import networks
 from .generate_results import coupling_matrix
 from . import cli
 from . import visualise
-# logger.start(sys.stdout, colorize=True, format="<green>{time}</green> <level>{message}</level>")
+logger.start(sys.stdout, colorize=True, format="<green>{time}</green> <level>{message}</level>")
 
 from . import _version
 __version__ = _version.get_versions()['version']
