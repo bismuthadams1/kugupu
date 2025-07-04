@@ -25,7 +25,8 @@ def main():
             u.atoms[u.atoms.masses == m].names = e
 
     add_names(u)
-    res = kgp.coupling_matrix(u, nn_cutoff=5.0, state='lumo', degeneracy=1, stop=3, model='xtb')
+    # use models: 'gfn1-XTB', or 'gfn2-XTB'
+    res = kgp.coupling_matrix(u, nn_cutoff=2.0, state='lumo', degeneracy=1, stop=1, model='xtb', xtb_model = 'gfn1-XTB')
     kgp.save_results('xtb_res.hdf5', res)
 if __name__ == "__main__":
     main()

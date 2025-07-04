@@ -91,7 +91,7 @@ class XTB(CouplingModel):
         return self.__call_local__(fragments, nn_cutoff, degeneracy, state)
 
 def _atomgroup_to_xyz(
-    atomgroup: AtomGroup,
+    atomgroup: tuple[AtomGroup],
 ) -> str:
     """Convert an MDAnalysis Atomgroup to an xyz
 
@@ -104,24 +104,21 @@ def _atomgroup_to_xyz(
     -------
     
     """
-    # if isinstance(atomgroup, tuple): 
-    #     atomgroup = sum(atomgroup[-1])
 
-    # rdkit_mol = atomgroup.convert_to.rdkit()
-    # xyz_block = rdmolfiles.MolToXYZBlock(rdkit_mol)
-    elements = atomgroup.elements  # faster than atomgroup.names if elements available
     if len(atomgroup) == 2:
         positions = shift_dimer_images(atomgroup[0], atomgroup[1])
+        elements = np.concatenate([atomgroup[0].elements, atomgroup[1].elements])
+
     else:
+        elements = atomgroup[0].elements
         positions = atomgroup.positions
-
-
     # Prepare formatted XYZ string
-    lines = [f"{len(atomgroup)}"]
+    lines = [f"{len(positions)}", ""]
     lines += [f"{el} {x:.8f} {y:.8f} {z:.8f}"
               for el, (x, y, z) in zip(elements, positions)]
 
-    xyz_block = "\n".join(lines)
+    xyz_block = "\n".join(lines) + "\n"
+
 
     return xyz_block
 
@@ -193,6 +190,7 @@ def _compute_xtb_frame_from_fragments(
             molecule=single_mol,
             mode = state,
             flavour= xtb_model,
+            dimer = False
         )
         H_frag[diag[ix:iy], diag[ix:iy]] = e_i
 
@@ -206,7 +204,8 @@ def _xtb_from_list(
     mode: Literal['homo', 'lumo'] = 'homo',
     flavour: Literal['gfn1-XTB', 'gfn2-XTB'] = 'gfn1-XTB',
     threshold: float = 0.1,
-    xtb_executable: str = XTB_EXECUTABLE
+    xtb_executable: str = XTB_EXECUTABLE,
+    dimer: bool = True
 ) -> Tuple[float, ...]:
     """
     Run xTB DIPRO calculations on a list of dimer geometries (XYZ strings).
@@ -229,7 +228,8 @@ def _xtb_from_list(
     """
     flavour_flags = {
         'gfn1-XTB': ['--gfn', '1'],
-        'gfn2-XTB': ['--gfn', '2']
+        'gfn2-XTB': ['--gfn', '2'],
+        'gfnff'   : ['--gfnff'],
     }
     if flavour not in flavour_flags:
         raise ValueError(f"Unsupported xTB flavour: {flavour}")
@@ -247,8 +247,10 @@ def _xtb_from_list(
         with tempfile.NamedTemporaryFile(suffix='.xyz', delete=False, mode='w') as tmp:
             tmp.write(xyz_str)
             tmp_filename = tmp.name
-
-        cmd = [xtb_executable, tmp_filename, '--dipro', str(threshold)] + flavour_flags[flavour]
+        if dimer:
+            cmd = [xtb_executable, tmp_filename, '--dipro', str(threshold)] + flavour_flags[flavour]
+        else:
+            cmd = [xtb_executable, tmp_filename] + flavour_flags[flavour]
         logger.info(cmd)
         try:
             completed = subprocess.run(
