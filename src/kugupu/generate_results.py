@@ -159,7 +159,7 @@ def coupling_matrix(u,
         if model_instance.local:
           logger.info("Running in Serial")
           fragments = u.atoms.fragments
-          H_frag, H_eff = model_instance(
+          H_frag = model_instance(
               fragments,
               nn_cutoff=nn_cutoff,
               degeneracy=degeneracy,
@@ -168,7 +168,7 @@ def coupling_matrix(u,
         else:
           logger.info("Running in Parallel")
           frame_idx = ts.frame
-          H_frag, H_eff = model_instance(
+          H_frag = model_instance(
               top_pickle,           # remote: pass pickled topology
               traj_filename,        # and the filename
               frame_idx,            # and this frame index
@@ -179,10 +179,10 @@ def coupling_matrix(u,
 
         frames.append(ts.frame)
         Hs.append(H_frag)
-        Heffs.append(H_eff)
+        # Heffs.append(H_eff)
 
     H_all = np.stack(Hs)
     frames_arr = np.array(frames)
-    H_eff_all = np.stack(Heffs)
+    # H_eff_all = np.stack(Heffs)
 
-    return KugupuResults(frames=frames_arr, H_frag=H_all, degeneracy=degeneracy, H_eff = H_eff_all)
+    return KugupuResults(frames=frames_arr, H_frag=H_all, degeneracy=degeneracy)#, H_eff = H_eff_all)

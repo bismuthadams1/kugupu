@@ -132,7 +132,7 @@ def _compute_ocelot_frame_from_fragments(
         e_i = predict_from_molecule(molecule=single_mol, model=ocelotml_model)
         H_frag[diag[ix:iy], diag[ix:iy]] = e_i
 
-    return H_frag, None
+    return H_frag
 
 def _atomgroup_to_pymatgen_molecule(atomgroup: AtomGroup) -> dict[tuple, PymatgenMolecule]:
     """Takes a tuple of AtomGroup objects and turns them into a single pymatgen object

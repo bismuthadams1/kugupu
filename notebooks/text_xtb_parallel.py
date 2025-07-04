@@ -3,8 +3,13 @@
 """
 import MDAnalysis as mda
 import kugupu as kgp
+from dask import distributed
+
+
 
 def main():
+
+    c = distributed.Client()
 
     u = mda.Universe('./datafiles/C6.data', './datafiles/C6.dcd')
     def add_names(u):
@@ -29,7 +34,7 @@ def main():
     add_names(u)
     # use models: 'gfn1-XTB', or 'gfn2-XTB', 'gfnff' seems to be broken!
     # save_to_out writes a csvs of dimers and Jeffs
-    res = kgp.coupling_matrix(u, nn_cutoff=2.5, state='lumo', degeneracy=1, stop=1, model='xtb', xtb_model = 'gfn1-XTB', save_to_out = True)
+    res = kgp.coupling_matrix(u, nn_cutoff=2.2, state='lumo', degeneracy=1, stop=1, model='xtb', xtb_model = 'gfn1-XTB', save_to_out = True, client=c)
     # print(res.H_eff)
     kgp.save_results('xtb_res.hdf5', res)
 if __name__ == "__main__":

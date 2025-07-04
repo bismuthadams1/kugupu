@@ -10,8 +10,10 @@ import subprocess
 import os
 import re
 from tqdm import tqdm
+import pandas as pd
 import pickle as pkl
 from MDAnalysis.topology.guessers import guess_types
+import datetime
 
 from ._yaehmop import shift_dimer_images
 
@@ -27,7 +29,7 @@ class XTBError(Exception):
 class XTB(CouplingModel):
     _name = 'xtb'
 
-    def __init__(self, *, local: bool = True, server_id: Optional["distributed.Client"] = None, xtb_model = 'gfn1-XTB'):
+    def __init__(self, *, local: bool = True, server_id: Optional["distributed.Client"] = None, xtb_model = 'gfn1-XTB', save_to_out: bool = False):
         super().__init__(local=local, server_id=server_id)
         if not self.local:
             if hasattr(self.server_id, "submit"):
@@ -39,6 +41,7 @@ class XTB(CouplingModel):
         else:
             self.client = None
         self.xtb_model = xtb_model
+        self.save_to_out = save_to_out
     
     def __call_local__(
             self, 
@@ -58,6 +61,7 @@ class XTB(CouplingModel):
             nn_cutoff = nn_cutoff,
             degeneracy = degeneracy,
             state = state,
+            save_to_out = self.save_to_out
         )
         
     def __call_remote__(
@@ -83,7 +87,7 @@ class XTB(CouplingModel):
         """
 
         u_worker = mda.Universe(top_pickle)
-        elements = guess_types(u.atoms.names)
+        elements = guess_types(u_worker.atoms.names)
         u_worker.add_TopologyAttr("elements", elements)
         u_worker.load_new(traj_filename)
         u_worker.trajectory[frame_idx]
@@ -156,6 +160,7 @@ def _compute_xtb_frame_from_fragments(
         degeneracy: np.ndarray,
         xtb_model: Literal['gfn1-XTB', 'gfn2-XTB'] = 'gfn1-XTB',
         state: Literal['homo', 'lumo'] = 'homo',  
+        save_to_out: bool = False,
 ) -> np.ndarray:
     dimers_dict = _convert_to_model_format(fragments, nn_cutoff)
     size = degeneracy.sum()
@@ -183,18 +188,18 @@ def _compute_xtb_frame_from_fragments(
         wave[i] = 0
         wave[j] = 0
 
-    for i in (set(range(len(degeneracy))) - set(wave.keys())):
-        ix, iy = starts[i], stops[i]
-        single_mol = _atomgroup_to_xyz(fragments[i])
-        e_i = _xtb_from_list(
-            molecule=single_mol,
-            mode = state,
-            flavour= xtb_model,
-            dimer = False
-        )
-        H_frag[diag[ix:iy], diag[ix:iy]] = e_i
+    # for i in (set(range(len(degeneracy))) - set(wave.keys())):
+    #     ix, iy = starts[i], stops[i]
+    #     single_mol = _atomgroup_to_xyz(fragments[i])
+    #     e_i = _xtb_from_list(
+    #         molecule=single_mol,
+    #         mode = state,
+    #         flavour= xtb_model,
+    #         dimer = False
+    #     )
+    #     H_frag[diag[ix:iy], diag[ix:iy]] = e_i
 
-    return H_frag, None
+    return H_frag
 
 #OVERIDE THIS WHEN XTB COMPILES
 XTB_EXECUTABLE = '/Users/k2584788/Downloads/xtb-bleed 2/build/xtb'
@@ -205,7 +210,8 @@ def _xtb_from_list(
     flavour: Literal['gfn1-XTB', 'gfn2-XTB'] = 'gfn1-XTB',
     threshold: float = 0.1,
     xtb_executable: str = XTB_EXECUTABLE,
-    dimer: bool = True
+    dimer: bool = True, 
+    save_to_out: bool = False,
 ) -> Tuple[float, ...]:
     """
     Run xTB DIPRO calculations on a list of dimer geometries (XYZ strings).
@@ -238,12 +244,13 @@ def _xtb_from_list(
     patterns = {
         'homo': re.compile(r"total \|J\(AB,eff\)\| for hole transport.*?:\s*([0-9.]+) eV", re.IGNORECASE),
         'lumo': re.compile(r"total \|J\(AB,eff\)\| for charge transport.*?:\s*([0-9.]+) eV", re.IGNORECASE),
+        # 'energy': ,
     }
     pattern = patterns[mode]
-    
+    dimer_results = []
     logger.info('running xtb DIPRO coupling across dimers')
-    print('xtb run', flush=True)
     for idx, xyz_str in tqdm(enumerate(dimers), total = len(dimers)):
+        row = {}
         with tempfile.NamedTemporaryFile(suffix='.xyz', delete=False, mode='w') as tmp:
             tmp.write(xyz_str)
             tmp_filename = tmp.name
@@ -274,9 +281,14 @@ def _xtb_from_list(
         match = pattern.search(completed.stdout)
         if not match:
             raise XTBError(f"Failed to parse coupling for dimer index {idx}. Output:\n{completed.stdout}")
-
+        row['geometry'] = xyz_str
+        row['Jeff'] = match.group(1)
+        dimer_results.append(row)
         coupling_value = float(match.group(1))
         results.append(coupling_value)
+    
+
+    pd.DataFrame(dimer_results).to_csv(f'coupling_results{datetime.datetime.now().strftime("%y%m%d_%H%M%S")}.csv')
 
     return tuple(results)
     
