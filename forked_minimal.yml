@@ -15,7 +15,7 @@ dependencies:
   - meson
   - nglview
   - ninja
-  - numpy #==1.26.4
+  - numpy==1.26.4
   - openff-qcsubmit
   - pip
   - psi4
