@@ -1,0 +1,36 @@
+WARNING conda.common.path.windows:_path_to(100): cygpath is not available, fallback to manual path conversion
+WARNING conda.common.path.windows:_path_to(100): cygpath is not available, fallback to manual path conversion
+no change     /cephfs/volumes/hpc_home/k2584788/cd785d08-f802-4e95-b708-5b050a4946fc/miniforge3/condabin/conda
+no change     /cephfs/volumes/hpc_home/k2584788/cd785d08-f802-4e95-b708-5b050a4946fc/miniforge3/bin/conda
+no change     /cephfs/volumes/hpc_home/k2584788/cd785d08-f802-4e95-b708-5b050a4946fc/miniforge3/bin/conda-env
+no change     /cephfs/volumes/hpc_home/k2584788/cd785d08-f802-4e95-b708-5b050a4946fc/miniforge3/bin/activate
+no change     /cephfs/volumes/hpc_home/k2584788/cd785d08-f802-4e95-b708-5b050a4946fc/miniforge3/bin/deactivate
+no change     /cephfs/volumes/hpc_home/k2584788/cd785d08-f802-4e95-b708-5b050a4946fc/miniforge3/etc/profile.d/conda.sh
+no change     /cephfs/volumes/hpc_home/k2584788/cd785d08-f802-4e95-b708-5b050a4946fc/miniforge3/etc/fish/conf.d/conda.fish
+no change     /cephfs/volumes/hpc_home/k2584788/cd785d08-f802-4e95-b708-5b050a4946fc/miniforge3/shell/condabin/Conda.psm1
+no change     /cephfs/volumes/hpc_home/k2584788/cd785d08-f802-4e95-b708-5b050a4946fc/miniforge3/shell/condabin/conda-hook.ps1
+no change     /cephfs/volumes/hpc_home/k2584788/cd785d08-f802-4e95-b708-5b050a4946fc/miniforge3/lib/python3.12/site-packages/xontrib/conda.xsh
+no change     /cephfs/volumes/hpc_home/k2584788/cd785d08-f802-4e95-b708-5b050a4946fc/miniforge3/etc/profile.d/conda.csh
+modified      /users/k2584788/.bashrc
+
+==> For changes to take effect, close and re-open your current shell. <==
+
+Added mamba to /users/k2584788/.bashrc
+
+==> For changes to take effect, close and re-open your current shell. <==
+
+Run 'mamba init' to be able to run mamba activate/deactivate
+and start a new shell session. Or use conda to activate/deactivate.
+
+cannot remove current environment.                                      deactivate and run mamba remove again
+
+CondaEnvironmentError: cannot remove current environment.                                      deactivate and run mamba remove again
+
+Will remove 81 (277.1 MB) tarball(s).
+Will remove 1 index cache(s).
+Will remove 18 (155.7 MB) package(s).
+There are no tempfile(s) to remove.
+There are no logfile(s) to remove.
+
+CondaValueError: prefix already exists: /cephfs/volumes/hpc_home/k2584788/cd785d08-f802-4e95-b708-5b050a4946fc/miniforge3/envs/qcarchive-worker-openff-xtb
+
