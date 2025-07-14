@@ -104,3 +104,6 @@ ENV/
 
 !*/make_env/.sh
 *.sh
+
+*.out
+*.dat
