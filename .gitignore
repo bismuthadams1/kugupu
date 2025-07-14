@@ -102,8 +102,8 @@ ENV/
 # mypy
 .mypy_cache/
 
-!*/make_env/.sh
 *.sh
+!make_env.sh
 
 *.out
 *.dat
