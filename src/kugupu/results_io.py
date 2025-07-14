@@ -59,12 +59,11 @@ def save_results(filename, results):
         f['frames'] = results.frames
         f['H_frag'] = results.H_frag
         f['degeneracy'] = results.degeneracy
-        try:
-          f['H_eff'] = results.H_eff
-        except AttributeError:
+        if results.H_eff is None:
           logger.info('no H_eff in results, not saving it')
-        else:
-          logger.debug('H_eff saved to file')
+        else: 
+          logger.debug('H_eff found, saving it')    
+          f['H_eff'] = results.H_eff
 
 
 def load_results(filename):
