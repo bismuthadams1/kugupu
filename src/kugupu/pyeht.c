@@ -4,8 +4,8 @@
 {
     "distutils": {
         "depends": [
-            "/Users/k2584788/.local/share/mamba/envs/kugupu_working/include/yaehmop/bind.h",
-            "/Users/k2584788/.local/share/mamba/envs/kugupu_working/include/yaehmop/prototypes.h"
+            "/cephfs/volumes/hpc_home/k2584788/cd785d08-f802-4e95-b708-5b050a4946fc/miniforge3/envs/forked_kugupu/include/yaehmop/bind.h",
+            "/cephfs/volumes/hpc_home/k2584788/cd785d08-f802-4e95-b708-5b050a4946fc/miniforge3/envs/forked_kugupu/include/yaehmop/prototypes.h"
         ],
         "extra_compile_args": [
             "-std=c99",
@@ -13,16 +13,12 @@
             "-O3"
         ],
         "include_dirs": [
-            "/Users/k2584788/.local/share/mamba/envs/kugupu_working/include",
-            "/Users/k2584788/.local/share/mamba/envs/kgp/include"
+            "/cephfs/volumes/hpc_home/k2584788/cd785d08-f802-4e95-b708-5b050a4946fc/miniforge3/envs/forked_kugupu/include"
         ],
         "libraries": [
             "yaehmop_eht",
             "lapack",
             "blas"
-        ],
-        "library_dirs": [
-            "/Users/k2584788/.local/share/mamba/envs/kgp/lib"
         ],
         "name": "kugupu._pyeht",
         "sources": [

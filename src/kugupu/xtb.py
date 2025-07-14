@@ -202,7 +202,7 @@ def _compute_xtb_frame_from_fragments(
     return H_frag
 
 #OVERIDE THIS WHEN XTB COMPILES
-XTB_EXECUTABLE = '/Users/k2584788/Downloads/xtb-bleed 2/build/xtb'
+XTB_EXECUTABLE = '/scratch/users/k2584788/xtb/build/xtb'
 
 def _xtb_from_list(
     dimers: List[str],

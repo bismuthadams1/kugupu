@@ -8,4 +8,6 @@
 #SBATCH --partition=cpu
 #SBATCH --cpus-per-task=1      
 
-mamba env create -f kugupu/forked_minimal.yml -y
+mamba env create -f ./forked_minimal.yml -y
+
+mamba run -n forked_kugupu pip install -e .
