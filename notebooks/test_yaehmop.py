@@ -25,7 +25,7 @@ def main():
             u.atoms[u.atoms.masses == m].names = e
 
     add_names(u)
-    res = kgp.coupling_matrix(u, nn_cutoff=5.0, state='lumo', degeneracy=1, stop=3)
+    res = kgp.coupling_matrix(u, nn_cutoff=4.5, state='lumo', degeneracy=1, stop=3)
 
 if __name__ == "__main__":
     main()
