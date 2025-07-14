@@ -59,7 +59,8 @@ def save_results(filename, results):
         f['frames'] = results.frames
         f['H_frag'] = results.H_frag
         f['degeneracy'] = results.degeneracy
-        # f['H_eff'] = results.H_eff
+        if results.Heff:
+          f['H_eff'] = results.H_eff
 
 
 def load_results(filename):
