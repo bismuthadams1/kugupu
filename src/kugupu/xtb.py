@@ -25,6 +25,8 @@ class XTBError(Exception):
     """Custom exception for xTB-related errors."""
     pass
 
+XTB_EXECUTABLE = '/scratch/users/k2584788/xtb/build/xtb'
+
 
 class XTB(CouplingModel):
     _name = 'xtb'
@@ -92,7 +94,57 @@ class XTB(CouplingModel):
         u_worker.load_new(traj_filename)
         u_worker.trajectory[frame_idx]
         fragments = u_worker.atoms.fragments
-        return self.__call_local__(fragments, nn_cutoff, degeneracy, state)
+        # return self.__call_local__(fragments, nn_cutoff, degeneracy, state)
+
+        dimers_dict = _convert_to_model_format(fragments, nn_cutoff)
+
+        size = degeneracy.sum()
+        H_frag = np.zeros((size, size))
+        stops = np.cumsum(degeneracy)
+        starts = np.r_[0, stops[:-1]]
+        diag = np.arange(size)
+
+        items = list(dimers_dict.items())
+        chunk_size = 50  
+        chunks = [
+            items[k : k + chunk_size]
+            for k in range(0, len(items), chunk_size)
+        ]
+
+        futures = []
+        for chunk in chunks:
+            xyz_list = [xyz for ((i, j), xyz) in chunk]
+            fut = self.client.submit(
+                _xtb_from_list,
+                xyz_list,
+                state,
+                self.xtb_model,
+                threshold=0.1,
+                xtb_executable=XTB_EXECUTABLE,
+                dimer=True,
+                save_to_out=self.save_to_out,
+            )
+            futures.append(fut)
+
+        results = self.client.gather(futures)  # List[ Tuple[float, ...] ]
+
+        all_rows = []
+        for chunk, (vals, rows) in zip(chunks, results):
+            # `vals` is a tuple of floats, `rows` is the same-length list of dicts
+            all_rows.extend(rows)
+            for ((i,j), _), val in zip(chunk, vals):
+                ix, iy = starts[i], stops[i]
+                jx, jy = starts[j], stops[j]
+                H_frag[diag[ix:iy], diag[ix:iy]] = val
+                H_frag[diag[jx:jy], diag[jx:jy]] = val
+
+        # finally, write one CSV per frame (or do this in your driver for *all* frames)
+        if self.save_to_out:
+            df = pd.DataFrame(all_rows)
+            fn = f'coupling_results_frame{frame_idx}_{datetime.datetime.now():%y%m%d_%H%M%S}.csv'
+            df.to_csv(fn, index=False)
+
+        return H_frag
 
 def _atomgroup_to_xyz(
     atomgroup: tuple[AtomGroup],
@@ -201,9 +253,6 @@ def _compute_xtb_frame_from_fragments(
 
     return H_frag
 
-#OVERIDE THIS WHEN XTB COMPILES
-XTB_EXECUTABLE = '/scratch/users/k2584788/xtb/build/xtb'
-
 def _xtb_from_list(
     dimers: List[str],
     mode: Literal['homo', 'lumo'] = 'homo',
@@ -249,6 +298,7 @@ def _xtb_from_list(
     pattern = patterns[mode]
     dimer_results = []
     logger.info('running xtb DIPRO coupling across dimers')
+    batch = 1000
     for idx, xyz_str in tqdm(enumerate(dimers), total = len(dimers)):
         row = {}
         with tempfile.NamedTemporaryFile(suffix='.xyz', delete=False, mode='w') as tmp:
@@ -281,14 +331,9 @@ def _xtb_from_list(
         match = pattern.search(completed.stdout)
         if not match:
             raise XTBError(f"Failed to parse coupling for dimer index {idx}. Output:\n{completed.stdout}")
-        row['geometry'] = xyz_str
-        row['Jeff'] = match.group(1)
+
+        row = {'geometry': xyz_str, 'Jeff': float(match.group(1))}
         dimer_results.append(row)
-        coupling_value = float(match.group(1))
-        results.append(coupling_value)
-    
 
-    pd.DataFrame(dimer_results).to_csv(f'coupling_results{datetime.datetime.now().strftime("%y%m%d_%H%M%S")}.csv')
-
-    return tuple(results)
+    return tuple(results), dimer_results
     

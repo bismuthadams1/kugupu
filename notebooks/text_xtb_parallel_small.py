@@ -34,7 +34,7 @@ def main():
     add_names(u)
     # use models: 'gfn1-XTB', or 'gfn2-XTB', 'gfnff' seems to be broken!
     # save_to_out writes a csvs of dimers and Jeffs
-    res = kgp.coupling_matrix(u, nn_cutoff=5.0, state='lumo', degeneracy=1, stop=3, model='xtb', xtb_model = 'gfn1-XTB', save_to_out = True, client=c)
+    res = kgp.coupling_matrix(u, nn_cutoff=5.0, state='lumo', degeneracy=1, stop=1, model='xtb', xtb_model = 'gfn1-XTB', save_to_out = True, client=c)
     # print(res.H_eff)
     kgp.save_results('xtb_res.hdf5', res)
 if __name__ == "__main__":
